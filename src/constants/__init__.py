@@ -17,5 +17,15 @@ NGINX_BINARY = "nginx"
 # blocks only valid when nested inside a site's own `location {}`.
 FASTCGI_INCLUDE_PATH = "/etc/nginx/snippets/wordpress_fastcgi.conf"
 
+# Where the wordpress-data PVC (uploads) is mounted, and where the
+# WordPress codebase itself is baked in from wp-base - same paths as
+# wordpress-nginx (see manifests/deployment.yaml and the Dockerfile).
+UPLOADS_ROOT = "/wp-data"
+WORDPRESS_CODE_ROOT = "/wp"
+
+# Static WordPress assets served directly from disk instead of through PHP,
+# matching wordpress-nginx's nginx.tmpl.
+STATIC_ASSET_WHITELIST_RE = r"(wp-bom[.]yaml|(wp-includes|wp-admin|wp-content/(plugins|mu-plugins|themes))/)"
+
 DEFAULT_NGINX_CONF_PATH = "/etc/nginx/conf.d/wordpress.conf"
 DEFAULT_RELOAD_DEBOUNCE_SECONDS = 2.0
