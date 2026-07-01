@@ -5,24 +5,21 @@ from typing import List
 from kubernetes_asyncio.client import CoreV1Api, CustomObjectsApi
 from kubernetes_asyncio.client.exceptions import ApiException
 
+from constants import (
+    DATABASE_PREFIX,
+    MARIADB_GROUP,
+    MARIADB_VERSION,
+    PASSWORD_SECRET_PREFIX,
+    USER_PREFIX,
+    WORDPRESS_GROUP,
+    WORDPRESS_PLURAL,
+    WORDPRESS_VERSION,
+)
 from models import DbCredentials, WordpressSiteInfo, WordpressSiteLookupError
 
 from .site_builder import build_site_info
 
 logger = logging.getLogger(__name__)
-
-WORDPRESS_GROUP = "wordpress.epfl.ch"
-WORDPRESS_VERSION = "v2"
-WORDPRESS_PLURAL = "wordpresssites"
-
-MARIADB_GROUP = "k8s.mariadb.com"
-MARIADB_VERSION = "v1alpha1"
-
-# Matches the `self.prefix` naming convention used by wp-operator when it
-# provisions a WordpressSite's database (see wp-operator's wp_operator.py).
-DATABASE_PREFIX = "wp-db-"
-USER_PREFIX = "wp-db-user-"
-PASSWORD_SECRET_PREFIX = "wp-db-password-"
 
 
 async def list_wordpress_sites(custom_api: CustomObjectsApi, namespace: str) -> List[dict]:
