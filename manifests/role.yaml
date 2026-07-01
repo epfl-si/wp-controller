@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wp-controller
+  namespace: wordpress-test
+rules:
+  # The resource wp-controller actually reconciles. `patch` is needed for
+  # kopf to store its own progress/diff-base annotations on the object.
+  - apiGroups: ["wordpress.epfl.ch"]
+    resources: ["wordpresssites"]
+    verbs: ["get", "list", "watch", "patch"]
+  # Read-only lookup of the MariaDB Database/User that wp-operator
+  # provisions for each WordpressSite, by their well-known names.
+  - apiGroups: ["k8s.mariadb.com"]
+    resources: ["databases", "users"]
+    verbs: ["get"]
+  # The Secret holding the site's database password, same lookup.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  # kopf posts Kubernetes Events to describe what it did.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
