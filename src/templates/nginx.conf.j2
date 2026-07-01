@@ -44,23 +44,16 @@ server {
     ####################### START LOCATION #######################
 
     # ------------------------------------------------------------- #
-    # Namespace     : {{ site.namespace }}
-    # WordpressSite : {{ site.name }}
-    # Hostname      : {{ site.hostname }}
-    # Path          : {{ site.path }}
+    # Namespace      : "{{ site.namespace }}";
+    # WordpressSite  : "{{ site.name }}";
+    # Hostname       : "{{ site.hostname }}";
+    # Path           : "{{ site.path }}";
     # ------------------------------------------------------------- #
 
 {% if site.path == "/" %}
 {% set ns.has_root_location = true %}
     location /robots.txt {
         fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
-    }
-{% endif %}
-{% if not site.path.endswith("/") %}
-    {# Relative links in the rendered HTML break without the canonical
-       trailing slash, so redirect the exact near-miss URL to it. #}
-    location = {{ site.path }} {
-        return 301 https://{{ hostname }}{{ site.path }}/;
     }
 {% endif %}
     location {{ site.root_uri }} {
@@ -101,7 +94,27 @@ server {
         fastcgi_param DOWNLOADS_PROTECTION_SCRIPT {{ site.protection_script }};
 {% endif %}
     }
+
     ######################## END LOCATION ########################
+{% if not site.path.endswith("/") %}
+
+    ####################### START LOCATION #######################
+
+    # ------------------------------------------------------------- #
+    # Namespace      : "{{ site.namespace }}";
+    # WordpressSite  : "{{ site.name }}";
+    # Hostname       : "{{ site.hostname }}";
+    # Path           : "{{ site.path }}";
+    # ------------------------------------------------------------- #
+
+    {# Relative links in the rendered HTML break without the canonical
+       trailing slash, so redirect the exact near-miss URL to it. #}
+    location = {{ site.path }} {
+        return 301 https://{{ hostname }}{{ site.path }}/;
+    }
+
+    ######################## END LOCATION ########################
+{% endif %}
 {% endfor %}
 {% if not ns.has_root_location %}
     # Catch-all in the (unlikely) case where there is no WordPress at
