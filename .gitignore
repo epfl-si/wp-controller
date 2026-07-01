@@ -1,2 +1,14 @@
 venv
+.venv
 *cache*
+__pycache__/
+*.py[cod]
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+*.egg-info/
+.vscode/
+.idea/
+*.swp
+*.log
