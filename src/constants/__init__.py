@@ -15,7 +15,7 @@ NGINX_BINARY = "nginx"
 # Must live outside conf.d/: nginx auto-includes every *.conf file there
 # directly inside http{}, but this file is a snippet of bare `location`
 # blocks only valid when nested inside a site's own `location {}`.
-FASTCGI_INCLUDE_PATH = "/etc/nginx/snippets/wordpress_fastcgi.conf"
+FASTCGI_INCLUDE_PATH = "/etc/nginx/snippets/fastcgi.conf"
 
 # Where the wordpress-data PVC (uploads) is mounted, and where the
 # WordPress codebase itself is baked in from wp-base - same paths as

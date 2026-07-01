@@ -26,7 +26,7 @@ def _group_by_hostname(sites: List[WordpressSiteInfo]):
 
 
 def render_config(sites: List[WordpressSiteInfo]) -> str:
-    template = _env.get_template("nginx.conf.j2")
+    template = _env.get_template("wordpress.conf.j2")
     return template.render(
         hosts=_group_by_hostname(sites),
         fastcgi_include_path=FASTCGI_INCLUDE_PATH,

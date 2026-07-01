@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /etc/nginx/snippets \
-    && cp src/templates/wordpress_fastcgi.conf /etc/nginx/snippets/wordpress_fastcgi.conf \
-    && cp src/templates/wordpress-http.conf /etc/nginx/conf.d/wordpress-http.conf
+    && cp src/templates/fastcgi.conf /etc/nginx/snippets/fastcgi.conf \
+    && cp src/templates/generic.conf /etc/nginx/conf.d/generic.conf \
+    && sed -i 's|^pid .*;|pid /tmp/nginx/nginx.pid;|' /etc/nginx/nginx.conf
 
 # The WordPress codebase: served directly for static assets
 # (wp-includes/wp-admin/wp-content plugins/themes) and PHP error pages,
