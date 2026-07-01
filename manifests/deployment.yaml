@@ -1,0 +1,59 @@
+# This container is meant to replace the "nginx" container in wp-ops'
+# existing wp-nginx Deployment (ansible/roles/wordpress-namespace/tasks/
+# nginx.yml), reusing its `fpm-socket` emptyDir to reach the "php"
+# container's php-fpm socket. It is shown here as a standalone Deployment
+# for local testing only - see README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wp-controller
+  namespace: wordpress-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wp-controller
+  template:
+    metadata:
+      labels:
+        app: wp-controller
+    spec:
+      serviceAccountName: wp-controller
+      containers:
+        - name: wp-controller
+          image: wp-controller:latest
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NGINX_CONF_PATH
+              value: /etc/nginx/conf.d/wordpress.conf
+            - name: RELOAD_DEBOUNCE_SECONDS
+              value: "2"
+            - name: LOG_LEVEL
+              value: INFO
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: fpm-socket
+              mountPath: /run/php-fpm
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["NET_BIND_SERVICE"]
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+      volumes:
+        - name: fpm-socket
+          emptyDir: {}
