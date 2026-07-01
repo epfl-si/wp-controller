@@ -1,0 +1,37 @@
+{# Managed by wp-controller - DO NOT EDIT MANUALLY #}
+
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location /healthz {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+
+    location / {
+        return 404;
+    }
+}
+{% for hostname, sites in hosts %}
+server {
+    listen 80;
+    server_name {{ hostname }};
+{% for site in sites %}
+    location {{ site.path }} {
+        fastcgi_param WP_DEBUG           {{ "true" if site.debug else "false" }};
+        fastcgi_param WP_ROOT_URI        {{ site.root_uri }};
+        fastcgi_param WP_UPLOADS_DIRNAME  {{ site.uploads_dirname }};
+        fastcgi_param WP_DB_HOST         {{ site.db.host }};
+        fastcgi_param WP_DB_NAME         {{ site.db.name }};
+        fastcgi_param WP_DB_USER         {{ site.db.user }};
+        fastcgi_param WP_DB_PASSWORD     {{ site.db.password }};
+{% if site.protection_script %}
+        fastcgi_param DOWNLOADS_PROTECTION_SCRIPT {{ site.protection_script }};
+{% endif %}
+        include {{ fastcgi_include_path }};
+    }
+{% endfor %}
+}
+{% endfor %}
