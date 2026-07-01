@@ -5,7 +5,9 @@ from typing import List
 from kubernetes_asyncio.client import CoreV1Api, CustomObjectsApi
 from kubernetes_asyncio.client.exceptions import ApiException
 
-from models import DbCredentials, WordpressSiteLookupError
+from models import DbCredentials, WordpressSiteInfo, WordpressSiteLookupError
+
+from .site_builder import build_site_info
 
 logger = logging.getLogger(__name__)
 
@@ -67,3 +69,19 @@ async def get_db_credentials(
         user=user_spec.get("name") or user["metadata"]["name"],
         password=base64.b64decode(secret.data["password"]).decode("utf-8"),
     )
+
+
+async def load_site_infos(core_api: CoreV1Api, custom_api: CustomObjectsApi, namespace: str) -> List[WordpressSiteInfo]:
+    """List every WordpressSite in the namespace and resolve it into a
+    WordpressSiteInfo. A single misconfigured or not-yet-provisioned site is
+    logged and skipped rather than aborting the whole sync (see 6.5: a bad
+    site must never take the rest of the namespace down with it)."""
+    sites = []
+    for raw_site in await list_wordpress_sites(custom_api, namespace):
+        site_name = raw_site.get("metadata", {}).get("name", "<unknown>")
+        try:
+            db = await get_db_credentials(core_api, custom_api, namespace, site_name)
+            sites.append(build_site_info(raw_site, db))
+        except (WordpressSiteLookupError, ValueError, KeyError) as e:
+            logger.warning(f"Skipping WordpressSite {namespace}/{site_name}: {e}")
+    return sites
