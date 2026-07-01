@@ -3,6 +3,8 @@ import logging
 import subprocess
 from typing import Optional
 
+from models import NginxConfigError
+
 logger = logging.getLogger(__name__)
 
 NGINX_BINARY = "nginx"
@@ -36,3 +38,10 @@ class NginxProcess:
             logger.warning("nginx did not stop in time, killing it")
             self._process.kill()
             await asyncio.to_thread(self._process.wait)
+
+    async def validate(self) -> None:
+        """Run `nginx -t` against the config currently on disk. Raises
+        NginxConfigError (with nginx's own diagnostic) if it is invalid."""
+        result = await asyncio.to_thread(subprocess.run, [NGINX_BINARY, "-t"], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise NginxConfigError(result.stderr.strip())
