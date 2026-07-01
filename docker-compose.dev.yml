@@ -22,5 +22,13 @@ services:
       # without a full rebuild.
       - ./main.py:/app/main.py:ro
       - ./src:/app/src:ro
+      # .dockerignore excludes this from the image, mount it for dev only.
+      - ./requirements-dev.txt:/app/requirements-dev.txt:ro
     ports:
       - "8080:80"
+    # Auto-restart kopf whenever a mounted .py file changes, for a real
+    # edit-and-see-it-reload dev loop instead of a static one-shot run.
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements-dev.txt &&
+      watchmedo auto-restart --directory=/app --pattern=*.py --recursive --
+      kopf run main.py --namespace=$$WATCH_NAMESPACE"

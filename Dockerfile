@@ -16,9 +16,12 @@ RUN mkdir -p /etc/nginx/snippets \
 # logs and the config we generate at runtime. Binding :80 as this user
 # still requires the NET_BIND_SERVICE capability, granted by the Pod's
 # securityContext (see manifests/deployment.yaml).
-RUN groupadd -r wp-controller && useradd -r -g wp-controller wp-controller \
+RUN groupadd -r wp-controller && useradd -r -m -g wp-controller wp-controller \
     && mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy \
     && chown -R wp-controller:wp-controller /etc/nginx/conf.d /etc/nginx/snippets /var/lib/nginx /var/log/nginx /run
+# So `pip install --user` (used for dev-only extras, see docker-compose.dev.yml)
+# has a real home to write to, and its console scripts are on PATH.
+ENV PATH="/home/wp-controller/.local/bin:${PATH}"
 USER wp-controller
 
 CMD ["sh", "-c", "kopf run main.py --namespace=${WATCH_NAMESPACE}"]
