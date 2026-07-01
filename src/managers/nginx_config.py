@@ -7,7 +7,7 @@ from typing import List
 
 from jinja2 import Environment, FileSystemLoader
 
-from constants import FASTCGI_INCLUDE_PATH
+from constants import FASTCGI_INCLUDE_PATH, STATIC_ASSET_WHITELIST_RE, UPLOADS_ROOT
 from models import WordpressSiteInfo
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -27,7 +27,12 @@ def _group_by_hostname(sites: List[WordpressSiteInfo]):
 
 def render_config(sites: List[WordpressSiteInfo]) -> str:
     template = _env.get_template("nginx.conf.j2")
-    return template.render(hosts=_group_by_hostname(sites), fastcgi_include_path=FASTCGI_INCLUDE_PATH)
+    return template.render(
+        hosts=_group_by_hostname(sites),
+        fastcgi_include_path=FASTCGI_INCLUDE_PATH,
+        uploads_root=UPLOADS_ROOT,
+        static_whitelist_re=STATIC_ASSET_WHITELIST_RE,
+    )
 
 
 def write_config_atomic(content: str, path: str) -> None:

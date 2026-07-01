@@ -41,12 +41,14 @@ server {
     }
 {% set ns = namespace(has_root_location=false) %}
 {% for site in sites %}
+
     # ------------------------------------------------------------- #
     # Namespace     : {{ site.namespace }}
     # WordpressSite : {{ site.name }}
     # Hostname      : {{ site.hostname }}
     # Path          : {{ site.path }}
     # ------------------------------------------------------------- #
+
 {% if site.path == "/" %}
 {% set ns.has_root_location = true %}
     location /robots.txt {
