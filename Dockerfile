@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN cp src/templates/wordpress_fastcgi.conf /etc/nginx/conf.d/wordpress_fastcgi.conf
+RUN mkdir -p /etc/nginx/snippets \
+    && cp src/templates/wordpress_fastcgi.conf /etc/nginx/snippets/wordpress_fastcgi.conf
 
 # nginx needs to bind :80 without running as root, and to write its pid,
 # logs and the config we generate at runtime. Binding :80 as this user
@@ -17,7 +18,7 @@ RUN cp src/templates/wordpress_fastcgi.conf /etc/nginx/conf.d/wordpress_fastcgi.
 # securityContext (see manifests/deployment.yaml).
 RUN groupadd -r wp-controller && useradd -r -g wp-controller wp-controller \
     && mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy \
-    && chown -R wp-controller:wp-controller /etc/nginx/conf.d /var/lib/nginx /var/log/nginx /run
+    && chown -R wp-controller:wp-controller /etc/nginx/conf.d /etc/nginx/snippets /var/lib/nginx /var/log/nginx /run
 USER wp-controller
 
 CMD ["sh", "-c", "kopf run main.py --namespace=${WATCH_NAMESPACE}"]
