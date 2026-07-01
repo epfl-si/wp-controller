@@ -3,7 +3,7 @@ services:
     build: .
     image: wp-controller:dev
     environment:
-      WATCH_NAMESPACE: wordpress-test
+      WATCH_NAMESPACE: svc0041t-wordpress
       NGINX_CONF_PATH: /etc/nginx/conf.d/wordpress.conf
       RELOAD_DEBOUNCE_SECONDS: "2"
       LOG_LEVEL: DEBUG
@@ -14,9 +14,10 @@ services:
     cap_add:
       - NET_BIND_SERVICE
     volumes:
-      # Point at whatever cluster your `kubectl` already talks to
-      # (`export KUBECONFIG=...` before `docker compose up` if unset).
-      - ${KUBECONFIG}:/kubeconfig/config:ro
+      # Point at whatever cluster your `kubectl` already talks to.
+      # Override with `export KUBECONFIG=...` before `docker compose up`
+      # if your kubeconfig isn't the default `~/.kube/config`.
+      - ${KUBECONFIG:-$HOME/.kube/config}:/kubeconfig/config:ro
       # Mount the source so `docker compose restart` picks up edits
       # without a full rebuild.
       - ./main.py:/app/main.py:ro

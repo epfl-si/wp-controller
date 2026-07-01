@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-NAMESPACE = wordpress-test
+NAMESPACE = svc0041t-wordpress
 WP_CONTROLLER_IMAGE_NAME = quay-its.epfl.ch/svc0041/wp-controller
 WP_CONTROLLER_IMAGE_TAG ?= latest
 
