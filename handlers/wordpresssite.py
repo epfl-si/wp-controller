@@ -8,6 +8,10 @@ from core import WordPressNginxController
 
 logger = logging.getLogger(__name__)
 
+WORDPRESS_GROUP = "wordpress.epfl.ch"
+WORDPRESS_VERSION = "v2"
+WORDPRESS_PLURAL = "wordpresssites"
+
 _controller: WordPressNginxController = None
 _watchdog_task: asyncio.Task = None
 
@@ -35,3 +39,12 @@ async def on_cleanup(**_):
         await _controller.nginx.stop()
 
     logger.info("wp-controller stopped")
+
+
+@kopf.on.create(WORDPRESS_GROUP, WORDPRESS_VERSION, WORDPRESS_PLURAL)
+@kopf.on.update(WORDPRESS_GROUP, WORDPRESS_VERSION, WORDPRESS_PLURAL)
+@kopf.on.delete(WORDPRESS_GROUP, WORDPRESS_VERSION, WORDPRESS_PLURAL)
+@kopf.on.resume(WORDPRESS_GROUP, WORDPRESS_VERSION, WORDPRESS_PLURAL)
+async def on_wordpresssite_change(name: str, namespace: str, **_):
+    logger.info(f"WordpressSite {namespace}/{name} changed, resyncing nginx config")
+    await _controller.sync()
