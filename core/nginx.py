@@ -3,7 +3,7 @@ import logging
 import subprocess
 from typing import Optional
 
-from models import NginxConfigError
+from models import NginxConfigError, NginxReloadError
 
 logger = logging.getLogger(__name__)
 
@@ -45,3 +45,12 @@ class NginxProcess:
         result = await asyncio.to_thread(subprocess.run, [NGINX_BINARY, "-t"], capture_output=True, text=True)
         if result.returncode != 0:
             raise NginxConfigError(result.stderr.strip())
+
+    async def reload(self) -> None:
+        """Ask the running nginx master process to reload its config
+        (re-reads /var/run/nginx.pid under the hood)."""
+        result = await asyncio.to_thread(
+            subprocess.run, [NGINX_BINARY, "-s", "reload"], capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            raise NginxReloadError(result.stderr.strip())
