@@ -1,0 +1,25 @@
+services:
+  wp-controller:
+    build: .
+    image: wp-controller:dev
+    environment:
+      WATCH_NAMESPACE: wordpress-test
+      NGINX_CONF_PATH: /etc/nginx/conf.d/wordpress.conf
+      RELOAD_DEBOUNCE_SECONDS: "2"
+      LOG_LEVEL: DEBUG
+      KUBECONFIG: /kubeconfig/config
+    # Binding :80 as the non-root user from the Dockerfile needs this,
+    # same as the NET_BIND_SERVICE capability granted in
+    # manifests/deployment.yaml for the real cluster.
+    cap_add:
+      - NET_BIND_SERVICE
+    volumes:
+      # Point at whatever cluster your `kubectl` already talks to
+      # (`export KUBECONFIG=...` before `docker compose up` if unset).
+      - ${KUBECONFIG}:/kubeconfig/config:ro
+      # Mount the source so `docker compose restart` picks up edits
+      # without a full rebuild.
+      - ./main.py:/app/main.py:ro
+      - ./src:/app/src:ro
+    ports:
+      - "8080:80"
