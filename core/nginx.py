@@ -54,3 +54,13 @@ class NginxProcess:
         )
         if result.returncode != 0:
             raise NginxReloadError(result.stderr.strip())
+
+    async def watchdog(self, poll_interval: float = 3.0) -> None:
+        """Run forever: whenever nginx dies unexpectedly, restart it with
+        whatever config is currently on disk (the last one known to be
+        valid, since we never write an unvalidated config there)."""
+        while True:
+            await asyncio.sleep(poll_interval)
+            if not self.is_running():
+                logger.error("nginx is not running, restarting it")
+                self.start()
