@@ -39,6 +39,9 @@ spec:
           volumeMounts:
             - name: fpm-socket
               mountPath: /run/php-fpm
+            - name: wordpress-data
+              mountPath: /wp-data/
+              readOnly: true
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -57,3 +60,6 @@ spec:
       volumes:
         - name: fpm-socket
           emptyDir: {}
+        - name: wordpress-data
+          persistentVolumeClaim:
+            claimName: wordpress-data
