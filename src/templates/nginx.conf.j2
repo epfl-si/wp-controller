@@ -41,6 +41,7 @@ server {
     }
 {% set ns = namespace(has_root_location=false) %}
 {% for site in sites %}
+    ####################### START LOCATION #######################
 
     # ------------------------------------------------------------- #
     # Namespace     : {{ site.namespace }}
@@ -100,6 +101,7 @@ server {
         fastcgi_param DOWNLOADS_PROTECTION_SCRIPT {{ site.protection_script }};
 {% endif %}
     }
+    ######################## END LOCATION ########################
 {% endfor %}
 {% if not ns.has_root_location %}
     # Catch-all in the (unlikely) case where there is no WordPress at
