@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /etc/nginx/snippets \
-    && cp src/templates/wordpress_fastcgi.conf /etc/nginx/snippets/wordpress_fastcgi.conf
+    && cp src/templates/wordpress_fastcgi.conf /etc/nginx/snippets/wordpress_fastcgi.conf \
+    && cp src/templates/wordpress-http.conf /etc/nginx/conf.d/wordpress-http.conf
 
 # The WordPress codebase: served directly for static assets
 # (wp-includes/wp-admin/wp-content plugins/themes) and PHP error pages,
@@ -24,8 +25,8 @@ COPY --from=wp-base /wp /wp
 # still requires the NET_BIND_SERVICE capability, granted by the Pod's
 # securityContext (see manifests/deployment.yaml).
 RUN groupadd -r wp-controller && useradd -r -m -g wp-controller wp-controller \
-    && mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy \
-    && chown -R wp-controller:wp-controller /etc/nginx/conf.d /etc/nginx/snippets /var/lib/nginx /var/log/nginx /run
+    && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
+    && chown -R wp-controller:wp-controller /etc/nginx/conf.d /etc/nginx/snippets /tmp/nginx /var/log/nginx /run
 # So `pip install --user` (used for dev-only extras, see docker-compose.dev.yml)
 # has a real home to write to, and its console scripts are on PATH.
 ENV PATH="/home/wp-controller/.local/bin:${PATH}"
