@@ -12,6 +12,9 @@ from constants import DEFAULT_RELOAD_DEBOUNCE_SECONDS  # noqa: E402
 from core import controller  # noqa: E402
 from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
 
+# Only takes effect for `python main.py` (local dev): the `kopf run`
+# CLI used in the container reconfigures logging itself on startup,
+# overriding this - see the kopf.objects level tweak in on_startup below.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,11 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
     # RBAC to list CustomResourceDefinitions or Namespaces
     settings.scanning.disabled = True
 
+    # kopf's own per-object "Handler succeeded"/"Updating is processed"
+    # lines at INFO drown out our own logs once there are many
+    # WordpressSites; keep only our application logs at that level.
+    logging.getLogger("kopf.objects").setLevel(logging.WARNING)
+
     await controller.connect()
     await controller.sync()
     controller.start_watchdog()
@@ -33,6 +41,7 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
 
 @kopf.on.cleanup()
 async def on_cleanup(**_):
+    controller.cancel_pending_sync()
     await controller.stop_watchdog()
     await controller.nginx.stop()
 
