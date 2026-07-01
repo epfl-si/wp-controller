@@ -18,8 +18,75 @@ server {
 server {
     listen 80;
     server_name {{ hostname }};
+
+    error_page 403 500 502 503 504 /global-error/index.php;
+
+    location /global-error/ {
+        set $status_code $status;
+
+        if ($query_string ~* "status=(\d+)") {
+            set $status_code $1;
+        }
+
+        if ($uri ~* "/([^/]+)/(\d+)\.php$") {
+            set $status_code $2;
+        }
+
+        fastcgi_param STATUS          $status_code;
+        fastcgi_param SCRIPT_FILENAME /wp/wp-error-pages/index.php;
+        fastcgi_param QUERY_STRING    $query_string;
+        fastcgi_param REQUEST_METHOD  $request_method;
+        fastcgi_param REQUEST_URI     $request_uri;
+        fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
+    }
+{% set ns = namespace(has_root_location=false) %}
 {% for site in sites %}
-    location {{ site.path }} {
+    # ------------------------------------------------------------- #
+    # Namespace     : {{ site.namespace }}
+    # WordpressSite : {{ site.name }}
+    # Hostname      : {{ site.hostname }}
+    # Path          : {{ site.path }}
+    # ------------------------------------------------------------- #
+{% if site.path == "/" %}
+{% set ns.has_root_location = true %}
+    location /robots.txt {
+        fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
+    }
+{% endif %}
+{% if not site.path.endswith("/") %}
+    {# Relative links in the rendered HTML break without the canonical
+       trailing slash, so redirect the exact near-miss URL to it. #}
+    location = {{ site.path }} {
+        return 301 https://{{ hostname }}{{ site.path }}/;
+    }
+{% endif %}
+    location {{ site.root_uri }} {
+        include {{ fastcgi_include_path }};
+
+        location ~ (wp-content/uploads)/ {
+{% if site.protection_script %}
+            fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
+{% else %}
+            rewrite .*/(wp-content/uploads/(.*)) /$2 break;
+            root {{ uploads_root }}/{{ site.uploads_dirname }}/uploads;
+            add_header Cache-Control "129600, public";
+{% endif %}
+        }
+
+        location = {{ site.root_uri }}wp-admin {
+            return 301 https://{{ hostname }}{{ site.root_uri }}wp-admin/;
+        }
+
+        location ~ {{ static_whitelist_re }} {
+            rewrite .*/({{ static_whitelist_re }}.*) /$1 break;
+            root /wp/;
+
+            location ~* \.(ico|pdf|apng|avif|webp|jpg|jpeg|png|gif|svg)$ {
+                add_header Cache-Control "129600, public";
+                rewrite .*/({{ static_whitelist_re }}.*) /$1 break;
+            }
+        }
+
         fastcgi_param WP_DEBUG           {{ "true" if site.debug else "false" }};
         fastcgi_param WP_ROOT_URI        {{ site.root_uri }};
         fastcgi_param WP_UPLOADS_DIRNAME  {{ site.uploads_dirname }};
@@ -30,8 +97,14 @@ server {
 {% if site.protection_script %}
         fastcgi_param DOWNLOADS_PROTECTION_SCRIPT {{ site.protection_script }};
 {% endif %}
-        include {{ fastcgi_include_path }};
     }
 {% endfor %}
+{% if not ns.has_root_location %}
+    # Catch-all in the (unlikely) case where there is no WordPress at
+    # the root of the domain:
+    location / {
+        return 404;
+    }
+{% endif %}
 }
 {% endfor %}
