@@ -13,5 +13,8 @@ logger = logging.getLogger(__name__)
 @kopf.on.delete(WORDPRESS_GROUP, WORDPRESS_VERSION, WORDPRESS_PLURAL)
 @kopf.on.resume(WORDPRESS_GROUP, WORDPRESS_VERSION, WORDPRESS_PLURAL)
 async def on_wordpresssite_change(name: str, namespace: str, **_):
-    logger.info(f"WordpressSite {namespace}/{name} changed, resyncing nginx config")
-    await controller.sync()
+    # Debounced: with many sites changing close together (e.g. the burst of
+    # `resume` events on startup), only the last one actually triggers a
+    # sync a moment later - see WordPressNginxController.request_sync.
+    logger.debug(f"WordpressSite {namespace}/{name} changed, requesting a sync")
+    await controller.request_sync()
