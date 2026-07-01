@@ -84,3 +84,15 @@ class WordPressNginxController:
             return
 
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
+
+
+# A single instance for the whole process: unlike the stateless Kubernetes
+# API clients, it owns the long-lived nginx subprocess, so it must survive
+# across handler calls instead of being recreated on every one.
+#
+# It lives here (not in main.py) because main.py is executed as
+# `__main__` when kopf runs it - a later `import main` from elsewhere
+# would load the file a second time under a different module name,
+# creating a second, disconnected instance. `core.controller` is always
+# imported the normal way, so there is only ever one.
+controller = WordPressNginxController()

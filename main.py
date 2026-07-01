@@ -9,19 +9,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 import kopf  # noqa: E402
 
 from constants import DEFAULT_RELOAD_DEBOUNCE_SECONDS  # noqa: E402
-from core import WordPressNginxController  # noqa: E402
+from core import controller  # noqa: E402
+from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-# A single instance for the whole process: unlike the stateless Kubernetes
-# API clients, it owns the long-lived nginx subprocess, so it must survive
-# across handler calls instead of being recreated on every one. Handlers
-# reach it with a deferred `import main` (see handlers/wordpresssite.py) to
-# avoid a circular import at module-load time.
-controller = WordPressNginxController()
-
-from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
 
 
 @kopf.on.startup()
