@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from typing import Optional
 
 from kubernetes_asyncio import client
 from kubernetes_asyncio import config as k8s_config
@@ -23,6 +25,7 @@ class WordPressNginxController:
         self.nginx = NginxProcess()
         self.core_api = None
         self.custom_api = None
+        self._watchdog_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> None:
         try:
@@ -33,6 +36,13 @@ class WordPressNginxController:
         api_client = client.ApiClient()
         self.core_api = client.CoreV1Api(api_client)
         self.custom_api = client.CustomObjectsApi(api_client)
+
+    def start_watchdog(self) -> None:
+        self._watchdog_task = asyncio.create_task(self.nginx.watchdog())
+
+    async def stop_watchdog(self) -> None:
+        if self._watchdog_task is not None:
+            self._watchdog_task.cancel()
 
     def _read_current_config(self):
         if not os.path.exists(self.conf_path):
