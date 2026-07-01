@@ -7,10 +7,10 @@ from typing import List
 
 from jinja2 import Environment, FileSystemLoader
 
+from constants import FASTCGI_INCLUDE_PATH
 from models import WordpressSiteInfo
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
-FASTCGI_INCLUDE_PATH = "/etc/nginx/conf.d/wordpress_fastcgi.conf"
 
 _env = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
