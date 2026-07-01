@@ -4,6 +4,7 @@ import os
 from kubernetes_asyncio import client
 from kubernetes_asyncio import config as k8s_config
 
+from constants import DEFAULT_NGINX_CONF_PATH
 from managers import load_site_infos, render_config, write_config_atomic
 from models import NginxConfigError, NginxReloadError
 
@@ -18,7 +19,7 @@ class WordPressNginxController:
 
     def __init__(self):
         self.namespace = os.environ["WATCH_NAMESPACE"]
-        self.conf_path = os.environ.get("NGINX_CONF_PATH", "/etc/nginx/conf.d/wordpress.conf")
+        self.conf_path = os.environ.get("NGINX_CONF_PATH", DEFAULT_NGINX_CONF_PATH)
         self.nginx = NginxProcess()
         self.core_api = None
         self.custom_api = None
