@@ -3,11 +3,10 @@ import logging
 import subprocess
 from typing import Optional
 
+from constants import NGINX_BINARY
 from models import NginxConfigError, NginxReloadError
 
 logger = logging.getLogger(__name__)
-
-NGINX_BINARY = "nginx"
 
 
 class NginxProcess:
