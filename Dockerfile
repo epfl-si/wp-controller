@@ -1,3 +1,5 @@
+FROM quay-its.epfl.ch/svc0041/wp-base:rc AS wp-base
+
 FROM python:3.13-bullseye
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -10,7 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /etc/nginx/snippets \
-    && cp src/templates/wordpress_fastcgi.conf /etc/nginx/snippets/wordpress_fastcgi.conf
+    && cp src/templates/wordpress_fastcgi.conf /etc/nginx/snippets/wordpress_fastcgi.conf \
+    && cp src/templates/wordpress-tuning.conf /etc/nginx/conf.d/wordpress-tuning.conf
+
+# The WordPress codebase: served directly for static assets
+# (wp-includes/wp-admin/wp-content plugins/themes) and PHP error pages,
+# same as wordpress-nginx.
+COPY --from=wp-base /wp /wp
 
 # nginx needs to bind :80 without running as root, and to write its pid,
 # logs and the config we generate at runtime. Binding :80 as this user
