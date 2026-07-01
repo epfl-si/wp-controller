@@ -30,5 +30,5 @@ services:
     # edit-and-see-it-reload dev loop instead of a static one-shot run.
     command: >
       sh -c "pip install --no-cache-dir -r requirements-dev.txt &&
-      watchmedo auto-restart --directory=/app --pattern=*.py --recursive --
+      watchmedo auto-restart --pattern=*.py --recursive --
       kopf run main.py --namespace=$$WATCH_NAMESPACE"
