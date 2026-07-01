@@ -4,6 +4,9 @@ import os
 from kubernetes_asyncio import client
 from kubernetes_asyncio import config as k8s_config
 
+from managers import load_site_infos, render_config, write_config_atomic
+from models import NginxConfigError, NginxReloadError
+
 from .nginx import NginxProcess
 
 logger = logging.getLogger(__name__)
@@ -29,3 +32,44 @@ class WordPressNginxController:
         api_client = client.ApiClient()
         self.core_api = client.CoreV1Api(api_client)
         self.custom_api = client.CustomObjectsApi(api_client)
+
+    def _read_current_config(self):
+        if not os.path.exists(self.conf_path):
+            return None
+        with open(self.conf_path) as f:
+            return f.read()
+
+    async def sync(self) -> None:
+        """Re-read every WordpressSite in the namespace from the Kubernetes
+        API, rebuild the full nginx config from scratch, and reload nginx
+        only if the result is both different and valid."""
+        sites = await load_site_infos(self.core_api, self.custom_api, self.namespace)
+        content = render_config(sites)
+        previous_content = self._read_current_config()
+
+        if content == previous_content:
+            logger.info(f"No configuration change for {len(sites)} WordpressSite(s)")
+            return
+
+        write_config_atomic(content, self.conf_path)
+
+        try:
+            await self.nginx.validate()
+        except NginxConfigError as e:
+            logger.error(f"Generated nginx config is invalid, keeping previous config: {e}")
+            if previous_content is not None:
+                write_config_atomic(previous_content, self.conf_path)
+            return
+
+        if not self.nginx.is_running():
+            self.nginx.start()
+            logger.info(f"nginx started with config for {len(sites)} WordpressSite(s)")
+            return
+
+        try:
+            await self.nginx.reload()
+        except NginxReloadError as e:
+            logger.error(f"Failed to reload nginx: {e}")
+            return
+
+        logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
