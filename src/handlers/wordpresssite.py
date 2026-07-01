@@ -4,13 +4,10 @@ import os
 
 import kopf
 
+from constants import DEFAULT_RELOAD_DEBOUNCE_SECONDS, WORDPRESS_GROUP, WORDPRESS_PLURAL, WORDPRESS_VERSION
 from core import WordPressNginxController
 
 logger = logging.getLogger(__name__)
-
-WORDPRESS_GROUP = "wordpress.epfl.ch"
-WORDPRESS_VERSION = "v2"
-WORDPRESS_PLURAL = "wordpresssites"
 
 _controller: WordPressNginxController = None
 _watchdog_task: asyncio.Task = None
@@ -21,7 +18,7 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
     global _controller, _watchdog_task
 
     settings.posting.level = logging.INFO
-    settings.batching.batch_window = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", "2"))
+    settings.batching.batch_window = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", DEFAULT_RELOAD_DEBOUNCE_SECONDS))
 
     _controller = WordPressNginxController()
     await _controller.connect()
