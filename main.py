@@ -28,6 +28,9 @@ from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the k
 async def on_startup(settings: kopf.OperatorSettings, **_):
     settings.posting.level = logging.INFO
     settings.batching.batch_window = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", DEFAULT_RELOAD_DEBOUNCE_SECONDS))
+    # This is a namespaced-only operator: it must not need cluster-scoped
+    # RBAC to list CustomResourceDefinitions or Namespaces
+    settings.scanning.disabled = True
 
     await controller.connect()
     await controller.sync()
