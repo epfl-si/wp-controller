@@ -6,7 +6,7 @@ from typing import Optional
 from kubernetes_asyncio import client
 from kubernetes_asyncio import config as k8s_config
 
-from constants import DEFAULT_NGINX_CONF_PATH
+from constants import DEFAULT_NGINX_CONF_PATH, DEFAULT_RELOAD_DEBOUNCE_SECONDS
 from managers import load_site_infos, render_config, write_config_atomic
 from models import NginxConfigError, NginxReloadError
 
@@ -26,6 +26,8 @@ class WordPressNginxController:
         self.core_api = None
         self.custom_api = None
         self._watchdog_task: Optional[asyncio.Task] = None
+        self._sync_task: Optional[asyncio.Task] = None
+        self.debounce_seconds = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", DEFAULT_RELOAD_DEBOUNCE_SECONDS))
 
     async def connect(self) -> None:
         try:
@@ -84,6 +86,24 @@ class WordPressNginxController:
             return
 
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
+
+    async def request_sync(self) -> None:
+        """Coalesce sync requests from many WordpressSite events arriving
+        close together (e.g. the flood of `resume` events on startup, or a
+        batch of Ingress-like changes) into a single sync: each call
+        cancels any not-yet-run pending sync and schedules a fresh one
+        `debounce_seconds` from now."""
+        if self._sync_task is not None:
+            self._sync_task.cancel()
+        self._sync_task = asyncio.create_task(self._debounced_sync())
+
+    async def _debounced_sync(self) -> None:
+        await asyncio.sleep(self.debounce_seconds)
+        await self.sync()
+
+    def cancel_pending_sync(self) -> None:
+        if self._sync_task is not None:
+            self._sync_task.cancel()
 
 
 # A single instance for the whole process: unlike the stateless Kubernetes
