@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import subprocess
 from typing import Optional
 
@@ -55,11 +56,14 @@ class NginxProcess:
             raise NginxReloadError(result.stderr.strip())
 
     async def watchdog(self, poll_interval: float = 3.0) -> None:
-        """Run forever: whenever nginx dies unexpectedly, restart it with
-        whatever config is currently on disk (the last one known to be
-        valid, since we never write an unvalidated config there)."""
+        """Run forever: if nginx dies unexpectedly, exit immediately rather
+        than restarting it in-process. Kubernetes' pod restartPolicy is what
+        actually recovers from that (see the livenessProbe on /healthz in
+        manifests/deployment.yaml, which nginx itself serves) - restarting
+        the whole process gets a clean re-sync for free instead of adding
+        our own process-supervision logic."""
         while True:
             await asyncio.sleep(poll_interval)
             if not self.is_running():
-                logger.error("nginx is not running, restarting it")
-                self.start()
+                logger.error("nginx is not running, exiting")
+                os._exit(1)
