@@ -2,7 +2,7 @@ import logging
 
 import kopf
 
-from constants import WORDPRESS_GROUP, WORDPRESS_PLURAL, WORDPRESS_VERSION
+from settings import WORDPRESS_GROUP, WORDPRESS_PLURAL, WORDPRESS_VERSION
 from core import controller
 
 logger = logging.getLogger(__name__)

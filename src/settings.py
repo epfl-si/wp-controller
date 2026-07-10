@@ -1,3 +1,5 @@
+import os
+
 WORDPRESS_GROUP = "wordpress.epfl.ch"
 WORDPRESS_VERSION = "v2"
 WORDPRESS_PLURAL = "wordpresssites"
@@ -27,5 +29,10 @@ WORDPRESS_CODE_ROOT = "/wp"
 # matching wordpress-nginx's nginx.tmpl.
 STATIC_ASSET_WHITELIST_RE = r"(wp-bom[.]yaml|(wp-includes|wp-admin|wp-content/(plugins|mu-plugins|themes))/)"
 
-DEFAULT_NGINX_CONF_PATH = "/etc/nginx/conf.d/wordpress.conf"
-DEFAULT_RELOAD_DEBOUNCE_SECONDS = 2.0
+# Below: resolved once here (default, overridable via ENV) instead of each
+# caller doing its own os.environ.get(...). WATCH_NAMESPACE has no default -
+# it stays a direct os.environ[...] read at the two call sites that need it
+# (main.py, core/controller.py), so importing settings.py for any of the
+# constants above never requires it to be set (e.g. in unit tests).
+NGINX_CONF_PATH = os.environ.get("NGINX_CONF_PATH", "/etc/nginx/conf.d/wordpress.conf")
+RELOAD_DEBOUNCE_SECONDS = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", 2.0))

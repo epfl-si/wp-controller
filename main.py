@@ -8,9 +8,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 
 import kopf  # noqa: E402
 
-from constants import DEFAULT_RELOAD_DEBOUNCE_SECONDS  # noqa: E402
 from core import controller  # noqa: E402
 from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
+from settings import RELOAD_DEBOUNCE_SECONDS  # noqa: E402
 
 # Only takes effect for `python main.py` (local dev): the `kopf run`
 # CLI used in the container reconfigures logging itself on startup,
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @kopf.on.startup()
 async def on_startup(settings: kopf.OperatorSettings, **_):
     settings.posting.level = logging.INFO
-    settings.batching.batch_window = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", DEFAULT_RELOAD_DEBOUNCE_SECONDS))
+    settings.batching.batch_window = RELOAD_DEBOUNCE_SECONDS
     # This is a namespaced-only operator: it must not need cluster-scoped
     # RBAC to list CustomResourceDefinitions or Namespaces
     settings.scanning.disabled = True

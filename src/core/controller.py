@@ -6,9 +6,9 @@ from typing import Optional
 from kubernetes_asyncio import client
 from kubernetes_asyncio import config as k8s_config
 
-from constants import DEFAULT_NGINX_CONF_PATH, DEFAULT_RELOAD_DEBOUNCE_SECONDS
 from managers import load_site_infos, render_config, write_config_atomic
 from models import NginxConfigError, NginxReloadError
+from settings import NGINX_CONF_PATH, RELOAD_DEBOUNCE_SECONDS
 
 from .nginx import NginxProcess
 
@@ -21,13 +21,13 @@ class WordPressNginxController:
 
     def __init__(self):
         self.namespace = os.environ["WATCH_NAMESPACE"]
-        self.conf_path = os.environ.get("NGINX_CONF_PATH", DEFAULT_NGINX_CONF_PATH)
+        self.conf_path = NGINX_CONF_PATH
         self.nginx = NginxProcess()
         self.core_api = None
         self.custom_api = None
         self._watchdog_task: Optional[asyncio.Task] = None
         self._sync_task: Optional[asyncio.Task] = None
-        self.debounce_seconds = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", DEFAULT_RELOAD_DEBOUNCE_SECONDS))
+        self.debounce_seconds = RELOAD_DEBOUNCE_SECONDS
 
     async def connect(self) -> None:
         try:

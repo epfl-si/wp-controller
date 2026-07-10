@@ -3,7 +3,7 @@ import logging
 import subprocess
 from typing import Optional
 
-from constants import NGINX_BINARY
+from settings import NGINX_BINARY
 from models import NginxConfigError, NginxReloadError
 
 logger = logging.getLogger(__name__)

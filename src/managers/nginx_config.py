@@ -7,7 +7,7 @@ from typing import List
 
 from jinja2 import Environment, FileSystemLoader
 
-from constants import FASTCGI_INCLUDE_PATH, STATIC_ASSET_WHITELIST_RE, UPLOADS_ROOT
+from settings import FASTCGI_INCLUDE_PATH, STATIC_ASSET_WHITELIST_RE, UPLOADS_ROOT
 from models import WordpressSiteInfo
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"

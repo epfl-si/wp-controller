@@ -5,7 +5,7 @@ from typing import List
 from kubernetes_asyncio.client import CoreV1Api, CustomObjectsApi
 from kubernetes_asyncio.client.exceptions import ApiException
 
-from constants import (
+from settings import (
     DATABASE_PREFIX,
     MARIADB_GROUP,
     MARIADB_VERSION,
