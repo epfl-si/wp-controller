@@ -12,12 +12,7 @@ from core import controller  # noqa: E402
 from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
 from settings import RELOAD_DEBOUNCE_SECONDS  # noqa: E402
 
-# Only takes effect for `python main.py` (local dev): the `kopf run`
-# CLI used in the container reconfigures logging itself on startup,
-# overriding this - see the kopf.objects level tweak in on_startup below.
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
 
 @kopf.on.startup()
 async def on_startup(settings: kopf.OperatorSettings, **_):
