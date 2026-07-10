@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import time
 from typing import Optional
 
 from kubernetes_asyncio import client
@@ -8,7 +9,7 @@ from kubernetes_asyncio import config as k8s_config
 
 from managers import load_site_infos, render_config, write_config_atomic
 from models import NginxConfigError, NginxReloadError
-from settings import NGINX_CONF_PATH, RELOAD_DEBOUNCE_SECONDS
+from settings import NGINX_CONF_PATH, RELOAD_DEBOUNCE_SECONDS, RELOAD_MAX_WAIT_SECONDS
 
 from .nginx import NginxProcess
 
@@ -27,7 +28,9 @@ class WordPressNginxController:
         self.custom_api = None
         self._watchdog_task: Optional[asyncio.Task] = None
         self._sync_task: Optional[asyncio.Task] = None
+        self._burst_started_at: Optional[float] = None
         self.debounce_seconds = RELOAD_DEBOUNCE_SECONDS
+        self.max_wait_seconds = RELOAD_MAX_WAIT_SECONDS
 
     async def connect(self) -> None:
         try:
@@ -90,16 +93,29 @@ class WordPressNginxController:
     async def request_sync(self) -> None:
         """Coalesce sync requests from many WordpressSite events arriving
         close together (e.g. the flood of `resume` events on startup, or a
-        batch of Ingress-like changes) into a single sync: each call
-        cancels any not-yet-run pending sync and schedules a fresh one
-        `debounce_seconds` from now."""
+        batch of Ingress-like changes) into a single sync: each call cancels
+        any not-yet-started pending sync and reschedules it `debounce_seconds`
+        from now - capped so it fires at most `max_wait_seconds` after the
+        first request of the current burst. Without that cap, a steady
+        stream of events arriving faster than `debounce_seconds` apart would
+        keep pushing the sync back forever and the state would never
+        actually get regenerated."""
+        now = time.monotonic()
+        if self._burst_started_at is None:
+            self._burst_started_at = now
+        delay = min(self.debounce_seconds, max(self.max_wait_seconds - (now - self._burst_started_at), 0))
+
         if self._sync_task is not None:
             self._sync_task.cancel()
-        self._sync_task = asyncio.create_task(self._debounced_sync())
+        self._sync_task = asyncio.create_task(self._debounced_sync(delay))
 
-    async def _debounced_sync(self) -> None:
-        await asyncio.sleep(self.debounce_seconds)
-        await self.sync()
+    async def _debounced_sync(self, delay: float) -> None:
+        await asyncio.sleep(delay)
+        self._burst_started_at = None
+        # Shielded so a sync that's already under way can't be aborted
+        # mid-step (e.g. after writing the config but before reloading
+        # nginx) by a trailing event cancelling this task.
+        await asyncio.shield(self.sync())
 
     def cancel_pending_sync(self) -> None:
         if self._sync_task is not None:

@@ -36,3 +36,6 @@ STATIC_ASSET_WHITELIST_RE = r"(wp-bom[.]yaml|(wp-includes|wp-admin|wp-content/(p
 # constants above never requires it to be set (e.g. in unit tests).
 NGINX_CONF_PATH = os.environ.get("NGINX_CONF_PATH", "/etc/nginx/conf.d/wordpress.conf")
 RELOAD_DEBOUNCE_SECONDS = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", 2.0))
+# Upper bound on how long a steady stream of events (each one resetting the
+# debounce) can postpone a sync - see WordPressNginxController.request_sync.
+RELOAD_MAX_WAIT_SECONDS = float(os.environ.get("RELOAD_MAX_WAIT_SECONDS", 30.0))
