@@ -1,10 +1,11 @@
+import asyncio
 import base64
 import logging
-from typing import List
+from typing import Dict, List
 
-from kubernetes_asyncio.client import CoreV1Api, CustomObjectsApi
-from kubernetes_asyncio.client.exceptions import ApiException
+from kubernetes_asyncio.client import CoreV1Api, CustomObjectsApi, V1Secret
 
+from models import DbCredentials, WordpressSiteInfo, WordpressSiteLookupError
 from settings import (
     DATABASE_PREFIX,
     MARIADB_GROUP,
@@ -15,7 +16,6 @@ from settings import (
     WORDPRESS_PLURAL,
     WORDPRESS_VERSION,
 )
-from models import DbCredentials, WordpressSiteInfo, WordpressSiteLookupError
 
 from .site_builder import build_site_info
 
@@ -29,33 +29,39 @@ async def list_wordpress_sites(custom_api: CustomObjectsApi, namespace: str) -> 
     return response.get("items", [])
 
 
-async def get_db_credentials(
-    core_api: CoreV1Api, custom_api: CustomObjectsApi, namespace: str, site_name: str
+async def load_db_credentials_index(core_api: CoreV1Api, custom_api: CustomObjectsApi, namespace: str):
+    """List every MariaDB Database, MariaDB User and Secret in the namespace
+    once, instead of resolving each WordpressSite's trio with 3 separate
+    `get` calls (N+1: 3 round trips per site instead of 3 total)."""
+    databases, users, secrets = await asyncio.gather(
+        custom_api.list_namespaced_custom_object(group=MARIADB_GROUP, version=MARIADB_VERSION, namespace=namespace, plural="databases"),
+        custom_api.list_namespaced_custom_object(group=MARIADB_GROUP, version=MARIADB_VERSION, namespace=namespace, plural="users"),
+        core_api.list_namespaced_secret(namespace=namespace),
+    )
+    databases_by_name = {d["metadata"]["name"]: d for d in databases.get("items", [])}
+    users_by_name = {u["metadata"]["name"]: u for u in users.get("items", [])}
+    secrets_by_name: Dict[str, V1Secret] = {s.metadata.name: s for s in secrets.items}
+    return databases_by_name, users_by_name, secrets_by_name
+
+
+def resolve_db_credentials(
+    namespace: str,
+    site_name: str,
+    databases_by_name: Dict[str, dict],
+    users_by_name: Dict[str, dict],
+    secrets_by_name: Dict[str, V1Secret],
 ) -> DbCredentials:
     """Resolve the MariaDB Database/User/Secret trio that wp-operator
-    provisions for a WordpressSite, by their well-known deterministic names."""
-    try:
-        database = await custom_api.get_namespaced_custom_object(
-            group=MARIADB_GROUP,
-            version=MARIADB_VERSION,
-            namespace=namespace,
-            plural="databases",
-            name=f"{DATABASE_PREFIX}{site_name}",
-        )
-        user = await custom_api.get_namespaced_custom_object(
-            group=MARIADB_GROUP,
-            version=MARIADB_VERSION,
-            namespace=namespace,
-            plural="users",
-            name=f"{USER_PREFIX}{site_name}",
-        )
-        secret = await core_api.read_namespaced_secret(
-            name=f"{PASSWORD_SECRET_PREFIX}{site_name}", namespace=namespace
-        )
-    except ApiException as e:
+    provisions for a WordpressSite, by their well-known deterministic names,
+    from the indexes built by load_db_credentials_index."""
+    database = databases_by_name.get(f"{DATABASE_PREFIX}{site_name}")
+    user = users_by_name.get(f"{USER_PREFIX}{site_name}")
+    secret = secrets_by_name.get(f"{PASSWORD_SECRET_PREFIX}{site_name}")
+    if database is None or user is None or secret is None:
         raise WordpressSiteLookupError(
-            f"Could not resolve database credentials for WordpressSite {namespace}/{site_name}: {e}"
-        ) from e
+            f"Could not resolve database credentials for WordpressSite {namespace}/{site_name}: "
+            f"Database/User/Secret not found"
+        )
 
     db_spec = database.get("spec", {})
     user_spec = user.get("spec", {})
@@ -73,11 +79,14 @@ async def load_site_infos(core_api: CoreV1Api, custom_api: CustomObjectsApi, nam
     WordpressSiteInfo. A single misconfigured or not-yet-provisioned site is
     logged and skipped rather than aborting the whole sync (see 6.5: a bad
     site must never take the rest of the namespace down with it)."""
+    raw_sites = await list_wordpress_sites(custom_api, namespace)
+    databases_by_name, users_by_name, secrets_by_name = await load_db_credentials_index(core_api, custom_api, namespace)
+
     sites = []
-    for raw_site in await list_wordpress_sites(custom_api, namespace):
+    for raw_site in raw_sites:
         site_name = raw_site.get("metadata", {}).get("name", "<unknown>")
         try:
-            db = await get_db_credentials(core_api, custom_api, namespace, site_name)
+            db = resolve_db_credentials(namespace, site_name, databases_by_name, users_by_name, secrets_by_name)
             sites.append(build_site_info(raw_site, db))
         except (WordpressSiteLookupError, ValueError, KeyError) as e:
             logger.warning(f"Skipping WordpressSite {namespace}/{site_name}: {e}")
