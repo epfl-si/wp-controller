@@ -4,11 +4,13 @@ metadata:
   name: wp-controller
   namespace: wordpress-test
 rules:
-  # The resource wp-controller actually reconciles. `patch` is needed for
-  # kopf to store its own progress/diff-base annotations on the object.
+  # The resource wp-controller actually reconciles. Watched via the raw
+  # @kopf.on.event handler (see src/handlers/wordpresssite.py), which -
+  # unlike @kopf.on.create/update/delete/resume - has no diff-base/progress
+  # state to persist, so no `patch` verb is needed here.
   - apiGroups: ["wordpress.epfl.ch"]
     resources: ["wordpresssites"]
-    verbs: ["get", "list", "watch", "patch"]
+    verbs: ["get", "list", "watch"]
   # Read-only lookup of the MariaDB Database/User that wp-operator
   # provisions for each WordpressSite. Listed once per sync and matched by
   # well-known name in-memory, rather than `get` per site, to avoid N+1
