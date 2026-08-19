@@ -21,6 +21,11 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
     # This is a namespaced-only operator: it must not need cluster-scoped
     # RBAC to list CustomResourceDefinitions or Namespaces
     settings.scanning.disabled = True
+    # Scope the finalizer to this operator instead of kopf's default
+    # `kopf.zalando.org/KopfFinalizerMarker`, shared by every kopf-based
+    # operator with no override - e.g. wp-operator, which also runs
+    # against this namespace.
+    settings.persistence.finalizer = "wordpress.epfl.ch/wp-controller"
 
     # kopf's own per-object "Handler succeeded"/"Updating is processed"
     # lines at INFO drown out our own logs once there are many
