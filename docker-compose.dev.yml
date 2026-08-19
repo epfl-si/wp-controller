@@ -8,11 +8,6 @@ services:
       RELOAD_DEBOUNCE_SECONDS: "2"
       LOG_LEVEL: DEBUG
       KUBECONFIG: /kubeconfig/config
-    # Binding :80 as the non-root user from the Dockerfile needs this,
-    # same as the NET_BIND_SERVICE capability granted in
-    # manifests/deployment.yaml for the real cluster.
-    cap_add:
-      - NET_BIND_SERVICE
     volumes:
       # Point at whatever cluster your `kubectl` already talks to.
       # Override with `export KUBECONFIG=...` before `docker compose up`
@@ -25,7 +20,7 @@ services:
       # .dockerignore excludes this from the image, mount it for dev only.
       - ./requirements-dev.txt:/app/requirements-dev.txt:ro
     ports:
-      - "8080:80"
+      - "8080:8080"
     # Auto-restart kopf whenever a mounted .py file changes, for a real
     # edit-and-see-it-reload dev loop instead of a static one-shot run.
     command: >

@@ -14,20 +14,28 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /etc/nginx/snippets \
     && cp src/templates/fastcgi.conf /etc/nginx/snippets/fastcgi.conf \
     && cp src/templates/generic.conf /etc/nginx/conf.d/generic.conf \
-    && sed -i 's|^pid .*;|pid /tmp/nginx/nginx.pid;|' /etc/nginx/nginx.conf
+    && sed -i 's|^pid .*;|pid /tmp/nginx/nginx.pid;|; /^user /d' /etc/nginx/nginx.conf
 
 # The WordPress codebase: served directly for static assets
 # (wp-includes/wp-admin/wp-content plugins/themes) and PHP error pages,
 # same as wordpress-nginx.
 COPY --from=wp-base /wp /wp
 
-# nginx needs to bind :80 without running as root, and to write its pid,
-# logs and the config we generate at runtime. Binding :80 as this user
-# still requires the NET_BIND_SERVICE capability, granted by the Pod's
-# securityContext (see manifests/deployment.yaml).
+# nginx listens on :8080 (see src/templates/wordpress.conf.j2), not :80,
+# so it can bind without any capability or root privileges - a capability
+# grant is unreliable across clusters (SCC policy, CRI-O ambient-capability
+# support). It still needs to write its pid, logs and the config we
+# generate at runtime.
+#
+# Group is set to root (GID 0) and made read/write/execute, not just
+# wp-controller's own group: on OpenShift the container actually runs as
+# an arbitrary, unpredictable UID assigned by the namespace's SCC - the
+# image's USER/UID is ignored - and the only thing OpenShift guarantees
+# about that UID is that it belongs to GID 0.
 RUN groupadd -r wp-controller && useradd -r -m -g wp-controller wp-controller \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
-    && chown -R wp-controller:wp-controller /etc/nginx/conf.d /etc/nginx/snippets /tmp/nginx /var/log/nginx /run
+    && chown -R wp-controller:0 /etc/nginx/conf.d /etc/nginx/snippets /tmp/nginx /var/log/nginx /run \
+    && chmod -R g+rwX /etc/nginx/conf.d /etc/nginx/snippets /tmp/nginx /var/log/nginx /run
 # So `pip install --user` (used for dev-only extras, see docker-compose.dev.yml)
 # has a real home to write to, and its console scripts are on PATH.
 ENV PATH="/home/wp-controller/.local/bin:${PATH}"

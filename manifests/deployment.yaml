@@ -35,7 +35,7 @@ spec:
               value: INFO
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
           volumeMounts:
             - name: fpm-socket
               mountPath: /run/php-fpm
@@ -46,7 +46,6 @@ spec:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
             capabilities:
-              add: ["NET_BIND_SERVICE"]
               drop: ["ALL"]
           livenessProbe:
             httpGet:

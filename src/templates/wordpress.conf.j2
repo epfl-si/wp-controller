@@ -1,7 +1,7 @@
 {# Managed by wp-controller - DO NOT EDIT MANUALLY #}
 
 server {
-    listen 80 default_server;
+    listen 8080 default_server;
     server_name _;
 
     location /healthz {
@@ -16,7 +16,7 @@ server {
 }
 {% for hostname, sites in hosts %}
 server {
-    listen 80;
+    listen 8080;
     server_name {{ hostname }};
 
     error_page 403 500 502 503 504 /global-error/index.php;
