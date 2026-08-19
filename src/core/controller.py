@@ -88,12 +88,16 @@ class WordPressNginxController:
         proven valid, so the live config is never overwritten with
         something unverified and never touched by the validation step."""
         sites, skipped = await load_site_infos(self.core_api, self.custom_api, self.namespace)
-        self._track_pending_lookups(skipped)
+        lookup_activity_logged = self._track_pending_lookups(skipped, resolved_names={s.name for s in sites})
         content = render_config(sites)
         previous_content = self._read_current_config()
 
         if content == previous_content:
-            logger.info(f"No configuration change for {len(sites)} WordpressSite(s)")
+            # Skip this if _track_pending_lookups already explained why
+            # nothing changed this cycle (a site started/stopped waiting) -
+            # restating "no change" right under that is pure noise.
+            if not lookup_activity_logged:
+                logger.info(f"No configuration change for {len(sites)} WordpressSite(s)")
             return
 
         current_names = {f"{s.namespace}/{s.name}" for s in sites}
@@ -136,33 +140,48 @@ class WordPressNginxController:
 
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
 
-    def _track_pending_lookups(self, skipped: dict[str, str]) -> None:
+    def _track_pending_lookups(self, skipped: dict[str, str], resolved_names: set[str]) -> bool:
         """Update retry bookkeeping for sites skipped this sync because a
         dependency (e.g. wp-operator's Database/User/Secret) isn't ready
         yet, and (re)schedule a retry while any are still within their
         timeout - see SITE_LOOKUP_RETRY_SECONDS/_TIMEOUT_SECONDS. Logs once
         when a site starts/stops waiting, not on every retry in between -
-        site_repository.load_site_infos only logs the reason at DEBUG."""
-        now = time.monotonic()
+        site_repository.load_site_infos only logs the reason at DEBUG.
+        Returns whether anything was logged, so sync() can skip its own
+        "no configuration change" line when this already explained why.
 
-        # Sites that resolved (or disappeared) since the last sync.
+        A site leaving `skipped` isn't necessarily resolved: it may instead
+        have been deleted (or be stuck Terminating behind some other
+        finalizer while wp-operator tears its DB down first) while still
+        waiting - `resolved_names` (from THIS sync's successfully resolved
+        sites) is what actually distinguishes the two, so a deleted site
+        isn't misreported as "resolved"."""
+        now = time.monotonic()
+        logged = False
+
         for site_name in list(self._pending_lookups):
-            if site_name not in skipped:
-                waited = now - self._pending_lookups.pop(site_name)
+            if site_name in skipped:
+                continue  # still waiting, nothing changed
+            waited = now - self._pending_lookups.pop(site_name)
+            logged = True
+            if site_name in resolved_names:
                 logger.info(f"WordpressSite {self.namespace}/{site_name} is now resolved (waited {waited:.0f}s)")
+            else:
+                logger.info(f"WordpressSite {self.namespace}/{site_name} was removed while waiting (waited {waited:.0f}s)")
 
         for site_name, reason in skipped.items():
             if site_name not in self._pending_lookups:
                 self._pending_lookups[site_name] = now
+                logged = True
                 logger.info(
                     f"WordpressSite {self.namespace}/{site_name} not ready yet ({reason}), "
-                    f"retrying every {SITE_LOOKUP_RETRY_SECONDS:.0f}s for up to "
-                    f"{SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s"
+                    f"retrying in {SITE_LOOKUP_RETRY_SECONDS:.0f}s"
                 )
 
         still_waiting = False
         for site_name, first_skipped_at in list(self._pending_lookups.items()):
             if now - first_skipped_at > SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:
+                logged = True
                 logger.error(
                     f"Giving up on WordpressSite {self.namespace}/{site_name}: "
                     f"still unresolved after {SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s ({skipped[site_name]})"
@@ -174,6 +193,7 @@ class WordPressNginxController:
         if self._retry_task is not None:
             self._retry_task.cancel()
         self._retry_task = asyncio.create_task(self._retry_pending_lookups()) if still_waiting else None
+        return logged
 
     async def _retry_pending_lookups(self) -> None:
         await asyncio.sleep(SITE_LOOKUP_RETRY_SECONDS)
