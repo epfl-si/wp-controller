@@ -21,6 +21,7 @@ services:
       - ./requirements-dev.txt:/app/requirements-dev.txt:ro
     ports:
       - "8080:8080"
+      - "9145:9145"
     # Auto-restart kopf whenever a mounted .py file changes, for a real
     # edit-and-see-it-reload dev loop instead of a static one-shot run.
     command: >

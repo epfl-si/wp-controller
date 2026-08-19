@@ -1,19 +1,21 @@
 FROM quay-its.epfl.ch/svc0041/wp-base:rc AS wp-base
 
-FROM python:3.13-bullseye
+FROM python:3.13-trixie
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     nginx \
+    libnginx-mod-http-lua \
     && rm -f /etc/nginx/sites-enabled/default \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN mkdir -p /etc/nginx/snippets \
+RUN mkdir -p /etc/nginx/snippets /etc/nginx/lua \
     && cp src/templates/fastcgi.conf /etc/nginx/snippets/fastcgi.conf \
     && cp src/templates/generic.conf /etc/nginx/conf.d/generic.conf \
+    && cp src/templates/lua/*.lua /etc/nginx/lua/ \
     && sed -i 's|^pid .*;|pid /tmp/nginx/nginx.pid;|; /^user /d' /etc/nginx/nginx.conf
 
 # The WordPress codebase: served directly for static assets

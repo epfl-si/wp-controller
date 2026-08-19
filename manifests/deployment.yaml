@@ -36,6 +36,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # Matches wordpress-nginx's port name, so wp-ops' existing
+            # PodMonitor (ansible/roles/wordpress-namespace/tasks/nginx.yml)
+            # can scrape this container in its place unmodified.
+            - name: nginx-metrics
+              containerPort: 9145
           volumeMounts:
             - name: fpm-socket
               mountPath: /run/php-fpm
