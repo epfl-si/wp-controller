@@ -39,3 +39,10 @@ RELOAD_DEBOUNCE_SECONDS = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", 2.0))
 # Upper bound on how long a steady stream of events (each one resetting the
 # debounce) can postpone a sync - see WordPressNginxController.request_sync.
 RELOAD_MAX_WAIT_SECONDS = float(os.environ.get("RELOAD_MAX_WAIT_SECONDS", 30.0))
+# A WordpressSite can exist before wp-operator has finished provisioning its
+# Database/User/Secret trio (see managers.site_repository.resolve_db_credentials).
+# Rather than skip it forever until some unrelated event happens to trigger
+# another sync, keep retrying on this interval until it resolves or the
+# timeout below is reached - see WordPressNginxController.sync.
+SITE_LOOKUP_RETRY_SECONDS = float(os.environ.get("SITE_LOOKUP_RETRY_SECONDS", 10.0))
+SITE_LOOKUP_RETRY_TIMEOUT_SECONDS = float(os.environ.get("SITE_LOOKUP_RETRY_TIMEOUT_SECONDS", 120.0))

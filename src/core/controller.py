@@ -9,7 +9,13 @@ from kubernetes_asyncio import config as k8s_config
 
 from managers import commit_candidate_config, load_site_infos, render_config, write_candidate_config
 from models import NginxConfigError, NginxReloadError
-from settings import NGINX_CONF_PATH, RELOAD_DEBOUNCE_SECONDS, RELOAD_MAX_WAIT_SECONDS
+from settings import (
+    NGINX_CONF_PATH,
+    RELOAD_DEBOUNCE_SECONDS,
+    RELOAD_MAX_WAIT_SECONDS,
+    SITE_LOOKUP_RETRY_SECONDS,
+    SITE_LOOKUP_RETRY_TIMEOUT_SECONDS,
+)
 
 from .nginx import NginxProcess
 
@@ -31,6 +37,10 @@ class WordPressNginxController:
         self._burst_started_at: Optional[float] = None
         self.debounce_seconds = RELOAD_DEBOUNCE_SECONDS
         self.max_wait_seconds = RELOAD_MAX_WAIT_SECONDS
+        # site_name -> monotonic time it was first seen skipped for a
+        # not-yet-resolvable dependency (see sync()).
+        self._pending_lookups: dict[str, float] = {}
+        self._retry_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> None:
         try:
@@ -62,7 +72,8 @@ class WordPressNginxController:
         validated with `nginx -t` next to the current config before it is
         ever moved into self.conf_path - the live config is never
         overwritten with something unverified."""
-        sites = await load_site_infos(self.core_api, self.custom_api, self.namespace)
+        sites, skipped = await load_site_infos(self.core_api, self.custom_api, self.namespace)
+        self._track_pending_lookups(skipped)
         content = render_config(sites)
         previous_content = self._read_current_config()
 
@@ -94,6 +105,41 @@ class WordPressNginxController:
 
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
 
+    def _track_pending_lookups(self, skipped: list[str]) -> None:
+        """Update retry bookkeeping for sites skipped this sync because a
+        dependency (e.g. wp-operator's Database/User/Secret) isn't ready
+        yet, and (re)schedule a retry while any are still within their
+        timeout - see SITE_LOOKUP_RETRY_SECONDS/_TIMEOUT_SECONDS."""
+        now = time.monotonic()
+        skipped_set = set(skipped)
+
+        # Drop sites that resolved (or disappeared) since the last sync.
+        for site_name in list(self._pending_lookups):
+            if site_name not in skipped_set:
+                del self._pending_lookups[site_name]
+
+        for site_name in skipped_set:
+            self._pending_lookups.setdefault(site_name, now)
+
+        still_waiting = False
+        for site_name, first_skipped_at in list(self._pending_lookups.items()):
+            if now - first_skipped_at > SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:
+                logger.error(
+                    f"Giving up on WordpressSite {self.namespace}/{site_name}: "
+                    f"still unresolved after {SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s"
+                )
+                del self._pending_lookups[site_name]
+            else:
+                still_waiting = True
+
+        if self._retry_task is not None:
+            self._retry_task.cancel()
+        self._retry_task = asyncio.create_task(self._retry_pending_lookups()) if still_waiting else None
+
+    async def _retry_pending_lookups(self) -> None:
+        await asyncio.sleep(SITE_LOOKUP_RETRY_SECONDS)
+        await self.request_sync()
+
     async def request_sync(self) -> None:
         """Coalesce sync requests from many WordpressSite events arriving
         close together (e.g. the flood of `resume` events on startup, or a
@@ -124,6 +170,8 @@ class WordPressNginxController:
     def cancel_pending_sync(self) -> None:
         if self._sync_task is not None:
             self._sync_task.cancel()
+        if self._retry_task is not None:
+            self._retry_task.cancel()
 
 
 # A single instance for the whole process: unlike the stateless Kubernetes

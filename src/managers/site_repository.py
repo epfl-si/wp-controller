@@ -74,15 +74,21 @@ def resolve_db_credentials(
     )
 
 
-async def load_site_infos(core_api: CoreV1Api, custom_api: CustomObjectsApi, namespace: str) -> List[WordpressSiteInfo]:
+async def load_site_infos(
+    core_api: CoreV1Api, custom_api: CustomObjectsApi, namespace: str
+) -> tuple[List[WordpressSiteInfo], List[str]]:
     """List every WordpressSite in the namespace and resolve it into a
     WordpressSiteInfo. A single misconfigured or not-yet-provisioned site is
     logged and skipped rather than aborting the whole sync (see 6.5: a bad
-    site must never take the rest of the namespace down with it)."""
+    site must never take the rest of the namespace down with it). Returns
+    the skipped sites' names alongside so callers can retry them once their
+    dependencies (e.g. wp-operator's Database/User/Secret) show up - see
+    WordPressNginxController.sync."""
     raw_sites = await list_wordpress_sites(custom_api, namespace)
     databases_by_name, users_by_name, secrets_by_name = await load_db_credentials_index(core_api, custom_api, namespace)
 
     sites = []
+    skipped = []
     for raw_site in raw_sites:
         site_name = raw_site.get("metadata", {}).get("name", "<unknown>")
         try:
@@ -90,4 +96,5 @@ async def load_site_infos(core_api: CoreV1Api, custom_api: CustomObjectsApi, nam
             sites.append(build_site_info(raw_site, db))
         except (WordpressSiteLookupError, ValueError, KeyError) as e:
             logger.warning(f"Skipping WordpressSite {namespace}/{site_name}: {e}")
-    return sites
+            skipped.append(site_name)
+    return sites, skipped
