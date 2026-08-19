@@ -39,10 +39,12 @@ class NginxProcess:
             self._process.kill()
             await asyncio.to_thread(self._process.wait)
 
-    async def validate(self) -> None:
-        """Run `nginx -t` against the config currently on disk. Raises
-        NginxConfigError (with nginx's own diagnostic) if it is invalid."""
-        result = await asyncio.to_thread(subprocess.run, [NGINX_BINARY, "-t"], capture_output=True, text=True)
+    async def validate(self, config_path: Optional[str] = None) -> None:
+        """Run `nginx -t` against `config_path` (or nginx's default config
+        if not given). Raises NginxConfigError (with nginx's own
+        diagnostic) if it is invalid."""
+        args = [NGINX_BINARY, "-t"] if config_path is None else [NGINX_BINARY, "-t", "-c", config_path]
+        result = await asyncio.to_thread(subprocess.run, args, capture_output=True, text=True)
         if result.returncode != 0:
             raise NginxConfigError(result.stderr.strip())
 

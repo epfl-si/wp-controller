@@ -14,6 +14,7 @@ USER_PREFIX = "wp-db-user-"
 PASSWORD_SECRET_PREFIX = "wp-db-password-"
 
 NGINX_BINARY = "nginx"
+NGINX_MAIN_CONF_PATH = "/etc/nginx/nginx.conf"
 # Must live outside conf.d/: nginx auto-includes every *.conf file there
 # directly inside http{}, but this file is a snippet of bare `location`
 # blocks only valid when nested inside a site's own `location {}`.
