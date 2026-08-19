@@ -41,6 +41,9 @@ class WordPressNginxController:
         self.custom_api = None
         self._watchdog_task: Optional[asyncio.Task] = None
         self._sync_task: Optional[asyncio.Task] = None
+        # Guarantees sync() calls never actually overlap - see
+        # _debounced_sync for why this can't-happen-in-theory case is real.
+        self._sync_lock = asyncio.Lock()
         self._burst_started_at: Optional[float] = None
         self.debounce_seconds = RELOAD_DEBOUNCE_SECONDS
         self.max_wait_seconds = RELOAD_MAX_WAIT_SECONDS
@@ -48,6 +51,9 @@ class WordPressNginxController:
         # not-yet-resolvable dependency (see sync()).
         self._pending_lookups: dict[str, float] = {}
         self._retry_task: Optional[asyncio.Task] = None
+        # None until the first sync commits a config - distinguishes the
+        # initial "here's what got configured" log from later diffs.
+        self._last_synced_names: Optional[set] = None
 
     async def connect(self) -> None:
         try:
@@ -90,6 +96,20 @@ class WordPressNginxController:
             logger.info(f"No configuration change for {len(sites)} WordpressSite(s)")
             return
 
+        current_names = {f"{s.namespace}/{s.name}" for s in sites}
+        if self._last_synced_names is None:
+            logger.info(f"Initial configuration: {len(sites)} WordpressSite(s)")
+        else:
+            added = sorted(current_names - self._last_synced_names)
+            removed = sorted(self._last_synced_names - current_names)
+            parts = []
+            if added:
+                parts.append(f"+{len(added)} ({', '.join(added)})")
+            if removed:
+                parts.append(f"-{len(removed)} ({', '.join(removed)})")
+            logger.info(f"Configuration changed for {len(sites)} WordpressSite(s): {'; '.join(parts) or 'content updated'}")
+        self._last_synced_names = current_names
+
         candidate_path = write_candidate_config(content, self.conf_path)
         scratch_main_conf = prepare_validation_root(candidate_path, self.conf_path)
         try:
@@ -116,28 +136,36 @@ class WordPressNginxController:
 
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
 
-    def _track_pending_lookups(self, skipped: list[str]) -> None:
+    def _track_pending_lookups(self, skipped: dict[str, str]) -> None:
         """Update retry bookkeeping for sites skipped this sync because a
         dependency (e.g. wp-operator's Database/User/Secret) isn't ready
         yet, and (re)schedule a retry while any are still within their
-        timeout - see SITE_LOOKUP_RETRY_SECONDS/_TIMEOUT_SECONDS."""
+        timeout - see SITE_LOOKUP_RETRY_SECONDS/_TIMEOUT_SECONDS. Logs once
+        when a site starts/stops waiting, not on every retry in between -
+        site_repository.load_site_infos only logs the reason at DEBUG."""
         now = time.monotonic()
-        skipped_set = set(skipped)
 
-        # Drop sites that resolved (or disappeared) since the last sync.
+        # Sites that resolved (or disappeared) since the last sync.
         for site_name in list(self._pending_lookups):
-            if site_name not in skipped_set:
-                del self._pending_lookups[site_name]
+            if site_name not in skipped:
+                waited = now - self._pending_lookups.pop(site_name)
+                logger.info(f"WordpressSite {self.namespace}/{site_name} is now resolved (waited {waited:.0f}s)")
 
-        for site_name in skipped_set:
-            self._pending_lookups.setdefault(site_name, now)
+        for site_name, reason in skipped.items():
+            if site_name not in self._pending_lookups:
+                self._pending_lookups[site_name] = now
+                logger.info(
+                    f"WordpressSite {self.namespace}/{site_name} not ready yet ({reason}), "
+                    f"retrying every {SITE_LOOKUP_RETRY_SECONDS:.0f}s for up to "
+                    f"{SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s"
+                )
 
         still_waiting = False
         for site_name, first_skipped_at in list(self._pending_lookups.items()):
             if now - first_skipped_at > SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:
                 logger.error(
                     f"Giving up on WordpressSite {self.namespace}/{site_name}: "
-                    f"still unresolved after {SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s"
+                    f"still unresolved after {SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s ({skipped[site_name]})"
                 )
                 del self._pending_lookups[site_name]
             else:
@@ -175,8 +203,19 @@ class WordPressNginxController:
         self._burst_started_at = None
         # Shielded so a sync that's already under way can't be aborted
         # mid-step (e.g. after writing the config but before reloading
-        # nginx) by a trailing event cancelling this task.
-        await asyncio.shield(self.sync())
+        # nginx) by a trailing event cancelling this task. The lock must be
+        # acquired *inside* the shielded coroutine, not around it: shield
+        # only protects what's inside it from cancellation, and cancelling
+        # this task would otherwise unwind straight through an outer `async
+        # with self._sync_lock` and release it while the shielded sync it
+        # was guarding is still actually running - letting a freshly
+        # scheduled sync start concurrently with the "cancelled" one instead
+        # of queueing behind it.
+        await asyncio.shield(self._locked_sync())
+
+    async def _locked_sync(self) -> None:
+        async with self._sync_lock:
+            await self.sync()
 
     def cancel_pending_sync(self) -> None:
         if self._sync_task is not None:

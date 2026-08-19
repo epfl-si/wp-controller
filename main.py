@@ -10,12 +10,17 @@ import kopf  # noqa: E402
 
 from core import controller  # noqa: E402
 from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
-from settings import RELOAD_DEBOUNCE_SECONDS  # noqa: E402
+from settings import LOG_LEVEL, RELOAD_DEBOUNCE_SECONDS  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 @kopf.on.startup()
 async def on_startup(settings: kopf.OperatorSettings, **_):
+    # kopf configures logging itself before running this activity, so this
+    # is what actually has the final say (see the kopf.objects override
+    # right below, which relies on the same ordering).
+    logging.getLogger().setLevel(LOG_LEVEL)
+
     settings.posting.level = logging.INFO
     settings.batching.batch_window = RELOAD_DEBOUNCE_SECONDS
     # This is a namespaced-only operator: it must not need cluster-scoped

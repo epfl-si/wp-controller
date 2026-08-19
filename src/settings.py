@@ -35,6 +35,7 @@ STATIC_ASSET_WHITELIST_RE = r"(wp-bom[.]yaml|(wp-includes|wp-admin|wp-content/(p
 # it stays a direct os.environ[...] read at the two call sites that need it
 # (main.py, core/controller.py), so importing settings.py for any of the
 # constants above never requires it to be set (e.g. in unit tests).
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 NGINX_CONF_PATH = os.environ.get("NGINX_CONF_PATH", "/etc/nginx/conf.d/wordpress.conf")
 RELOAD_DEBOUNCE_SECONDS = float(os.environ.get("RELOAD_DEBOUNCE_SECONDS", 2.0))
 # Upper bound on how long a steady stream of events (each one resetting the
