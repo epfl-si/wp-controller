@@ -3,12 +3,10 @@ import logging
 import kopf
 
 from settings import (
-    DATABASE_PREFIX,
     MARIADB_GROUP,
     MARIADB_VERSION,
-    PASSWORD_SECRET_PREFIX,
-    USER_PREFIX,
     WORDPRESS_GROUP,
+    WORDPRESS_KIND,
     WORDPRESS_PLURAL,
     WORDPRESS_VERSION,
 )
@@ -26,12 +24,12 @@ async def on_wordpresssite_change(name: str, namespace: str, **_):
     await controller.request_sync()
 
 
-def _is_site_dependency(prefix: str):
-    """kopf `when=` filter: only react to the objects wp-operator provisions
-    for a WordpressSite (matched by well-known name, same as
-    site_repository.resolve_db_credentials), not every Secret in the
-    namespace."""
-    return lambda name, **_: bool(name) and name.startswith(prefix)
+def _is_site_child(meta, **_) -> bool:
+    """kopf `when=` filter: only react to objects owned by a WordpressSite
+    (what wp-operator provisions for it), not every Secret in the
+    namespace. Matched on the ownerReferences, like
+    site_repository.resolve_db_credentials - never on names."""
+    return any(ref.get("kind") == WORDPRESS_KIND for ref in meta.get("ownerReferences") or [])
 
 
 # The DB credentials baked into the nginx config come from these three, so
@@ -39,19 +37,19 @@ def _is_site_dependency(prefix: str):
 # being deleted) must trigger a re-sync - the sync itself is a no-op when the
 # rendered config comes out identical. These are plain events: no finalizer
 # or annotation is ever written to these objects, hence read-only RBAC.
-@kopf.on.event(MARIADB_GROUP, MARIADB_VERSION, "databases", when=_is_site_dependency(DATABASE_PREFIX))
+@kopf.on.event(MARIADB_GROUP, MARIADB_VERSION, "databases", when=_is_site_child)
 async def on_database_change(name: str, namespace: str, **_):
     logger.debug(f"Database {namespace}/{name} changed, requesting a sync")
     await controller.request_sync()
 
 
-@kopf.on.event(MARIADB_GROUP, MARIADB_VERSION, "users", when=_is_site_dependency(USER_PREFIX))
+@kopf.on.event(MARIADB_GROUP, MARIADB_VERSION, "users", when=_is_site_child)
 async def on_user_change(name: str, namespace: str, **_):
     logger.debug(f"User {namespace}/{name} changed, requesting a sync")
     await controller.request_sync()
 
 
-@kopf.on.event("", "v1", "secrets", when=_is_site_dependency(PASSWORD_SECRET_PREFIX))
+@kopf.on.event("", "v1", "secrets", when=_is_site_child)
 async def on_secret_change(name: str, namespace: str, **_):
     logger.debug(f"Secret {namespace}/{name} changed, requesting a sync")
     await controller.request_sync()

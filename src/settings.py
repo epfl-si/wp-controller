@@ -7,11 +7,10 @@ WORDPRESS_PLURAL = "wordpresssites"
 MARIADB_GROUP = "k8s.mariadb.com"
 MARIADB_VERSION = "v1alpha1"
 
-# Naming convention used by wp-operator when it provisions a WordpressSite's
-# database (see wp-operator's wp_operator.py `self.prefix`).
-DATABASE_PREFIX = "wp-db-"
-USER_PREFIX = "wp-db-user-"
-PASSWORD_SECRET_PREFIX = "wp-db-password-"
+# The MariaDB Database, User and password Secret that wp-operator provisions
+# for a WordpressSite are found through their ownerReferences to it, never
+# through their names.
+WORDPRESS_KIND = "WordpressSite"
 
 NGINX_BINARY = "nginx"
 NGINX_MAIN_CONF_PATH = "/etc/nginx/nginx.conf"

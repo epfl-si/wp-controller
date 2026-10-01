@@ -15,7 +15,7 @@ rules:
     verbs: ["get", "list", "watch", "patch"]
   # Read-only lookup of the MariaDB Database/User that wp-operator
   # provisions for each WordpressSite. Listed once per sync and matched by
-  # well-known name in-memory, rather than `get` per site, to avoid N+1
+  # ownerReference in-memory, rather than `get` per site, to avoid N+1
   # API calls. Also watched (src/handlers/wordpresssite.py), so a change
   # to either triggers a re-sync.
   - apiGroups: ["k8s.mariadb.com"]
