@@ -22,6 +22,7 @@ services:
     ports:
       - "8080:8080"
       - "9145:9145"
+      - "9190:9190"
     # Auto-restart kopf whenever a mounted .py file changes, for a real
     # edit-and-see-it-reload dev loop instead of a static one-shot run.
     command: >

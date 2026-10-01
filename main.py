@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 import kopf  # noqa: E402
 
 from core import controller  # noqa: E402
+from core import metrics  # noqa: E402
 from handlers import (  # noqa: E402,F401 (registers the kopf handlers)
     on_database_change,
     on_secret_change,
@@ -42,6 +43,7 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
     # WordpressSites; keep only our application logs at that level.
     logging.getLogger("kopf.objects").setLevel(logging.WARNING)
 
+    metrics.start_server()
     await controller.connect()
     await controller.sync()
     controller.start_watchdog()

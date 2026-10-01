@@ -24,6 +24,7 @@ from settings import (
     SITE_LOOKUP_RETRY_TIMEOUT_SECONDS,
 )
 
+from . import metrics
 from .nginx import NginxProcess
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,18 @@ class WordPressNginxController:
             return f.read()
 
     async def sync(self) -> None:
+        """Run one sync (see _sync), recording its outcome in the metrics."""
+        try:
+            with metrics.sync_duration.time():
+                await self._sync()
+        except Exception:
+            metrics.record_error("error")
+            raise
+        finally:
+            metrics.last_sync.set_to_current_time()
+            metrics.nginx_up.set(1 if self.nginx.is_running() else 0)
+
+    async def _sync(self) -> None:
         """Re-read every WordpressSite in the namespace from the Kubernetes
         API, rebuild the full nginx config from scratch, and reload nginx
         only if the result is both different and valid. The candidate is
@@ -88,6 +101,8 @@ class WordPressNginxController:
         live config - the single step that modifies it."""
         sites, skipped = await load_site_infos(self.core_api, self.custom_api, self.namespace)
         lookup_activity_logged = self._track_pending_lookups(skipped, resolved_names={s.name for s in sites})
+        metrics.sites.labels("configured").set(len(sites))
+        metrics.sites.labels("pending").set(len(skipped))
         content = render_config(sites)
         previous_content = self._read_current_config()
 
@@ -97,6 +112,10 @@ class WordPressNginxController:
             # restating "no change" right under that is pure noise.
             if not lookup_activity_logged:
                 logger.info(f"No configuration change for {len(sites)} WordpressSite(s)")
+            metrics.syncs.labels("unchanged").inc()
+            # What is on disk already passed validation, so any earlier
+            # rejected candidate is moot now.
+            metrics.config_valid.set(1)
             return
 
         current_names = {f"{s.namespace}/{s.name}" for s in sites}
@@ -120,6 +139,8 @@ class WordPressNginxController:
             await self.nginx.validate(validation_path)
         except (NginxConfigError, RuntimeError, OSError) as e:
             os.unlink(candidate_path)
+            metrics.config_valid.set(0)
+            metrics.record_error("invalid")
             logger.error(f"Generated nginx config is invalid, keeping previous config: {e}")
             return
         finally:
@@ -127,18 +148,27 @@ class WordPressNginxController:
                 cleanup_validation_config(validation_path)
 
         commit_candidate_config(candidate_path, self.conf_path)
+        metrics.config_valid.set(1)
+        metrics.last_change.set_to_current_time()
 
         if not self.nginx.is_running():
             self.nginx.start()
+            metrics.syncs.labels("applied").inc()
+            metrics.last_success.set_to_current_time()
+            metrics.last_reload.set_to_current_time()
             logger.info(f"nginx started with config for {len(sites)} WordpressSite(s)")
             return
 
         try:
             await self.nginx.reload()
         except NginxReloadError as e:
+            metrics.record_error("reload_failed")
             logger.error(f"Failed to reload nginx: {e}")
             return
 
+        metrics.syncs.labels("applied").inc()
+        metrics.last_success.set_to_current_time()
+        metrics.last_reload.set_to_current_time()
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
 
     def _track_pending_lookups(self, skipped: dict[str, str], resolved_names: set[str]) -> bool:

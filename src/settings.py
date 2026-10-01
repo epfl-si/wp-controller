@@ -48,3 +48,6 @@ RELOAD_MAX_WAIT_SECONDS = float(os.environ.get("RELOAD_MAX_WAIT_SECONDS", 30.0))
 # timeout below is reached - see WordPressNginxController.sync.
 SITE_LOOKUP_RETRY_SECONDS = float(os.environ.get("SITE_LOOKUP_RETRY_SECONDS", 10.0))
 SITE_LOOKUP_RETRY_TIMEOUT_SECONDS = float(os.environ.get("SITE_LOOKUP_RETRY_TIMEOUT_SECONDS", 120.0))
+# wp-controller's own Prometheus metrics (see core/metrics.py); 9145 is
+# taken by nginx's request metrics.
+METRICS_PORT = int(os.environ.get("METRICS_PORT", 9190))

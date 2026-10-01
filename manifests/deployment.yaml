@@ -41,6 +41,9 @@ spec:
             # can scrape this container in its place unmodified.
             - name: nginx-metrics
               containerPort: 9145
+            # wp-controller's own metrics (uptime, config_valid, last sync...)
+            - name: controller-metrics
+              containerPort: 9190
           volumeMounts:
             - name: fpm-socket
               mountPath: /run/php-fpm
