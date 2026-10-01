@@ -142,6 +142,7 @@ class WordPressNginxController:
             metrics.config_valid.set(0)
             metrics.record_error("invalid")
             logger.error(f"Generated nginx config is invalid, keeping previous config: {e}")
+            logger.debug(f"Rejected nginx config:\n{content}")
             return
         finally:
             if validation_path is not None:
