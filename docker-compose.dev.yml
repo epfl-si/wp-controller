@@ -24,7 +24,7 @@ services:
       # .dockerignore excludes this from the image, mount it for dev only.
       - ./requirements-dev.txt:/app/requirements-dev.txt:ro
     ports:
-      - "8080:8080"
+      - "8000:8000"
       - "9145:9145"
       - "9190:9190"
     # Auto-restart kopf whenever a mounted .py file changes, for a real
