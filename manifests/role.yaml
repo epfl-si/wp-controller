@@ -16,14 +16,16 @@ rules:
   # Read-only lookup of the MariaDB Database/User that wp-operator
   # provisions for each WordpressSite. Listed once per sync and matched by
   # well-known name in-memory, rather than `get` per site, to avoid N+1
-  # API calls.
+  # API calls. Also watched (src/handlers/wordpresssite.py), so a change
+  # to either triggers a re-sync.
   - apiGroups: ["k8s.mariadb.com"]
     resources: ["databases", "users"]
-    verbs: ["list"]
-  # The Secret holding each site's database password, same lookup.
+    verbs: ["list", "watch"]
+  # The Secret holding each site's database password, same lookup and
+  # same watch (a rotated password must reach the nginx config).
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["list"]
+    verbs: ["list", "watch"]
   # kopf posts Kubernetes Events to describe what it did.
   - apiGroups: [""]
     resources: ["events"]

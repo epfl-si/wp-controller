@@ -9,7 +9,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 import kopf  # noqa: E402
 
 from core import controller  # noqa: E402
-from handlers import on_wordpresssite_change  # noqa: E402,F401 (registers the kopf handler)
+from handlers import (  # noqa: E402,F401 (registers the kopf handlers)
+    on_database_change,
+    on_secret_change,
+    on_user_change,
+    on_wordpresssite_change,
+)
 from settings import LOG_LEVEL, RELOAD_DEBOUNCE_SECONDS  # noqa: E402
 
 logger = logging.getLogger(__name__)
