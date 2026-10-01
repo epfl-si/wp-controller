@@ -58,6 +58,10 @@ server {
 {% endif %}
     location {{ site.root_uri }} {
         include {{ fastcgi_include_path }};
+        {# Default handler: whatever no nested location below claims (e.g. a
+           missing file, or a URL with a dot in its last segment) goes to
+           WordPress, which answers with its own real 404. #}
+        fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
 
         location ~ (wp-content/uploads)/ {
 {% if site.protection_script %}
@@ -66,6 +70,9 @@ server {
             rewrite .*/(wp-content/uploads/(.*)) /$2 break;
             root {{ uploads_root }}/{{ site.uploads_dirname }}/uploads;
             add_header Cache-Control "129600, public";
+            {# Not on disk: let WordPress answer (via the site's own `location`,
+               which carries its fastcgi params) instead of a bare 404. #}
+            try_files $uri {{ site.root_uri }};
 {% endif %}
         }
 
@@ -76,10 +83,12 @@ server {
         location ~ {{ static_whitelist_re }} {
             rewrite .*/({{ static_whitelist_re }}.*) /$1 break;
             root /wp/;
+            try_files $uri {{ site.root_uri }};
 
             location ~* \.(ico|pdf|apng|avif|webp|jpg|jpeg|png|gif|svg)$ {
                 add_header Cache-Control "129600, public";
                 rewrite .*/({{ static_whitelist_re }}.*) /$1 break;
+                try_files $uri {{ site.root_uri }};
             }
         }
 
