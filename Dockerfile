@@ -33,9 +33,9 @@ COPY --from=quay-its.epfl.ch/svc0041/wp-base:rc /wp /wp
 # image's USER/UID is ignored - and the only thing OpenShift guarantees
 # about that UID is that it belongs to GID 0.
 RUN groupadd -r wp-controller && useradd -r -m -g wp-controller wp-controller \
-    && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
-    && chown -R wp-controller:0 /etc/nginx/conf.d /etc/nginx/snippets /tmp/nginx /var/log/nginx /run \
-    && chmod -R g+rwX /etc/nginx/conf.d /etc/nginx/snippets /tmp/nginx /var/log/nginx /run
+    && mkdir -p /etc/nginx/errors /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
+    && chown -R wp-controller:0 /etc/nginx/conf.d /etc/nginx/snippets /etc/nginx/errors /tmp/nginx /var/log/nginx /run \
+    && chmod -R g+rwX /etc/nginx/conf.d /etc/nginx/snippets /etc/nginx/errors /tmp/nginx /var/log/nginx /run
 # So `pip install --user` (used for dev-only extras, see docker-compose.dev.yml)
 # has a real home to write to, and its console scripts are on PATH.
 ENV PATH="/home/wp-controller/.local/bin:${PATH}"
