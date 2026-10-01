@@ -1,5 +1,3 @@
-FROM quay-its.epfl.ch/svc0041/wp-base:rc AS wp-base
-
 FROM python:3.13-trixie
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,16 +10,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN mkdir -p /etc/nginx/snippets /etc/nginx/lua \
-    && cp src/templates/fastcgi.conf /etc/nginx/snippets/fastcgi.conf \
-    && cp src/templates/generic.conf /etc/nginx/conf.d/generic.conf \
-    && cp src/templates/lua/*.lua /etc/nginx/lua/ \
-    && sed -i 's|^pid .*;|pid /tmp/nginx/nginx.pid;|; /^user /d' /etc/nginx/nginx.conf
+RUN set -ex; mkdir -p /etc/nginx/snippets /etc/nginx/lua; \
+    cp src/templates/fastcgi.conf /etc/nginx/snippets/fastcgi.conf; \   
+    cp src/templates/generic.conf /etc/nginx/conf.d/generic.conf; \
+    cp src/templates/lua/*.lua /etc/nginx/lua/; \   
+    sed -i 's|^pid .*;|pid /tmp/nginx/nginx.pid;|; /^user /d' /etc/nginx/nginx.conf
 
 # The WordPress codebase: served directly for static assets
 # (wp-includes/wp-admin/wp-content plugins/themes) and PHP error pages,
 # same as wordpress-nginx.
-COPY --from=wp-base /wp /wp
+COPY --from=quay-its.epfl.ch/svc0041/wp-base:rc /wp /wp
 
 # nginx listens on :8080 (see src/templates/wordpress.conf.j2), not :80,
 # so it can bind without any capability or root privileges - a capability
