@@ -51,3 +51,10 @@ SITE_LOOKUP_RETRY_TIMEOUT_SECONDS = float(os.environ.get("SITE_LOOKUP_RETRY_TIME
 # wp-controller's own Prometheus metrics (see core/metrics.py); 9145 is
 # taken by nginx's request metrics.
 METRICS_PORT = int(os.environ.get("METRICS_PORT", 9190))
+# Where the last rejected nginx config (and nginx's verbose output for it) is
+# kept for debugging - see WordPressNginxController._keep_rejected_config.
+# Not under conf.d/: it holds the sites' DB passwords and shouldn't sit next
+# to the config nginx loads. Created and made writable in the Dockerfile.
+REJECTED_CONFIG_DIR = os.environ.get("REJECTED_CONFIG_DIR", "/etc/nginx/errors")
+# How many rejected configs to keep there; older ones are deleted.
+REJECTED_CONFIG_KEEP = int(os.environ.get("REJECTED_CONFIG_KEEP", 5))

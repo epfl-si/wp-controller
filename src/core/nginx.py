@@ -51,12 +51,15 @@ class NginxProcess:
             output = "\n".join(part.strip() for part in (result.stderr, result.stdout) if part.strip())
             # nginx -t has no verbose flag: the closest thing is a debug
             # error_log. Only run it once the test already failed (it is
-            # very noisy), and only log it at DEBUG.
+            # very noisy). Not logged: it can contain the config's secrets,
+            # so it is handed to the caller on the exception instead.
             verbose = await asyncio.to_thread(
                 subprocess.run, [*args, "-g", "error_log stderr debug;"], capture_output=True, text=True
             )
-            logger.debug(f"Verbose `nginx -t` output:\n{verbose.stderr.strip()}")
-            raise NginxConfigError(f"`{' '.join(args)}` exited with {result.returncode}:\n{output}")
+            raise NginxConfigError(
+                f"`{' '.join(args)}` exited with {result.returncode}:\n{output}",
+                verbose_output=verbose.stderr.strip(),
+            )
 
     async def reload(self) -> None:
         """Ask the running nginx master process to reload its config

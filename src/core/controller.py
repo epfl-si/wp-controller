@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import glob
 import os
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from kubernetes_asyncio import client
@@ -18,6 +20,8 @@ from managers import (
 from models import NginxConfigError, NginxReloadError
 from settings import (
     NGINX_CONF_PATH,
+    REJECTED_CONFIG_DIR,
+    REJECTED_CONFIG_KEEP,
     RELOAD_DEBOUNCE_SECONDS,
     RELOAD_MAX_WAIT_SECONDS,
     SITE_LOOKUP_RETRY_SECONDS,
@@ -139,10 +143,17 @@ class WordPressNginxController:
             await self.nginx.validate(validation_path)
         except (NginxConfigError, RuntimeError, OSError) as e:
             os.unlink(candidate_path)
+            rejected_path = self._keep_rejected_config(content, e)
             metrics.config_valid.set(0)
             metrics.record_error("invalid")
-            logger.error(f"Generated nginx config is invalid, keeping previous config: {e}")
-            logger.debug(f"Rejected nginx config:\n{content}")
+            logger.error(
+                f"Generated nginx config is invalid, keeping previous config: {e}\n"
+                + (
+                    f"The rejected config and nginx's verbose output are in {rejected_path}[.log]"
+                    if rejected_path
+                    else "The rejected config could not be saved"
+                )
+            )
             return
         finally:
             if validation_path is not None:
@@ -171,6 +182,42 @@ class WordPressNginxController:
         metrics.last_success.set_to_current_time()
         metrics.last_reload.set_to_current_time()
         logger.info(f"nginx reloaded for {len(sites)} WordpressSite(s)")
+
+    def _keep_rejected_config(self, content: str, error: Exception) -> Optional[str]:
+        """Keep the rejected config for debugging in
+        REJECTED_CONFIG_DIR/<UTC timestamp>.rejected (and nginx's
+        verbose output next to it, with a `.log` suffix) instead of printing
+        it: it holds the sites' DB passwords, which must not reach the logs.
+        Files are created 0600, and only the REJECTED_CONFIG_KEEP most recent
+        are kept. Returns the path, or None if it could not be written -
+        a failure to save diagnostics must never break the sync itself."""
+        try:
+            os.makedirs(REJECTED_CONFIG_DIR, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            rejected_path = os.path.join(REJECTED_CONFIG_DIR, f"{stamp}.rejected")
+            self._write_private(rejected_path, content)
+            verbose_output = getattr(error, "verbose_output", "")
+            if verbose_output:
+                self._write_private(f"{rejected_path}.log", verbose_output)
+            self._prune_rejected_configs()
+            return rejected_path
+        except OSError as e:
+            logger.warning(f"Could not keep the rejected nginx config in {REJECTED_CONFIG_DIR}: {e}")
+            return None
+
+    @staticmethod
+    def _prune_rejected_configs() -> None:
+        kept = sorted(glob.glob(os.path.join(REJECTED_CONFIG_DIR, "*.rejected")))
+        for old in kept[: max(len(kept) - REJECTED_CONFIG_KEEP, 0)]:
+            for path in (old, f"{old}.log"):
+                if os.path.exists(path):
+                    os.unlink(path)
+
+    @staticmethod
+    def _write_private(path: str, text: str) -> None:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
 
     def _track_pending_lookups(self, skipped: dict[str, str], resolved_names: set[str]) -> bool:
         """Update retry bookkeeping for sites skipped this sync because a
