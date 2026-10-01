@@ -58,3 +58,9 @@ METRICS_PORT = int(os.environ.get("METRICS_PORT", 9190))
 REJECTED_CONFIG_DIR = os.environ.get("REJECTED_CONFIG_DIR", "/etc/nginx/errors")
 # How many rejected configs to keep there; older ones are deleted.
 REJECTED_CONFIG_KEEP = int(os.environ.get("REJECTED_CONFIG_KEEP", 5))
+# Testing aid: append a deliberately invalid directive to every generated
+# config, so `nginx -t` rejects it and the whole failure path (rejected-config
+# file, wp_controller_config_valid=0, error log) can be exercised on demand.
+# Safe by construction - a rejected candidate never replaces the live config.
+# Unset it and restart (or let the next sync run) to recover.
+FORCE_INVALID_CONFIG = os.environ.get("FORCE_INVALID_CONFIG", "").lower() in ("1", "true", "yes")

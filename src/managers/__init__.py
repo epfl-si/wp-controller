@@ -2,6 +2,7 @@ from .nginx_config import (
     build_validation_config,
     cleanup_validation_config,
     commit_candidate_config,
+    force_invalid,
     render_config,
     write_candidate_config,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "build_validation_config",
     "cleanup_validation_config",
     "commit_candidate_config",
+    "force_invalid",
     "build_site_info",
     "list_wordpress_sites",
     "load_site_infos",

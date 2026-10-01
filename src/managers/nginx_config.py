@@ -49,6 +49,16 @@ def render_config(sites: List[WordpressSiteInfo]) -> str:
     )
 
 
+def force_invalid(content: str) -> str:
+    """Testing aid (see settings.FORCE_INVALID_CONFIG): make `content`
+    unparseable for nginx, with a note saying why."""
+    return (
+        f"{content}\n"
+        "# FORCE_INVALID_CONFIG is set: the directive below is deliberately invalid\n"
+        "wp_controller_forced_invalid_directive;\n"
+    )
+
+
 def write_candidate_config(content: str, path: str) -> str:
     """Write `content` to a temp file next to `path` (same filesystem, so
     os.rename stays atomic) and return its path. The `.candidate` suffix

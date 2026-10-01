@@ -7,6 +7,9 @@ services:
       NGINX_CONF_PATH: /etc/nginx/conf.d/wordpress.conf
       RELOAD_DEBOUNCE_SECONDS: "2"
       LOG_LEVEL: DEBUG
+      # Uncomment to deliberately generate an invalid config and exercise the
+      # failure path (rejected-config file, config_valid=0 metric).
+      # FORCE_INVALID_CONFIG: "1"
       KUBECONFIG: /kubeconfig/config
     volumes:
       # Point at whatever cluster your `kubectl` already talks to.

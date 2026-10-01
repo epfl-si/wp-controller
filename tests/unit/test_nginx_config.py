@@ -1,6 +1,6 @@
 import pytest
 
-from managers.nginx_config import nginx_quote, render_config
+from managers.nginx_config import force_invalid, nginx_quote, render_config
 from managers.site_builder import build_site_info
 from models import DbCredentials
 
@@ -42,3 +42,10 @@ def test_site_location_defaults_to_php(sample_wordpresssite_body, sample_db_cred
 
     # a fastcgi_pass directly in the site's location, before its nested ones
     assert site_block.index("fastcgi_pass") < site_block.index("location ~")
+
+
+def test_force_invalid_appends_an_unknown_directive():
+    broken = force_invalid("server {}\n")
+
+    assert broken.startswith("server {}\n")
+    assert "\nwp_controller_forced_invalid_directive;\n" in broken
