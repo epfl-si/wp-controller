@@ -12,11 +12,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: wp-controller
+      app.kubernetes.io/name: wp-controller
+      app.kubernetes.io/component: controller
   template:
     metadata:
       labels:
-        app: wp-controller
+        app.kubernetes.io/name: wp-controller
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/version: latest
     spec:
       serviceAccountName: wp-controller
       containers:
@@ -31,6 +34,22 @@ spec:
               value: /etc/nginx/conf.d/wordpress.conf
             - name: RELOAD_DEBOUNCE_SECONDS
               value: "2"
+            - name: RELOAD_MAX_WAIT_SECONDS
+              value: "30"
+            - name: SITE_LOOKUP_RETRY_SECONDS
+              value: "10"
+            - name: SITE_LOOKUP_RETRY_TIMEOUT_SECONDS
+              value: "120"
+            - name: METRICS_PORT
+              value: "9190"
+            - name: REJECTED_CONFIG_DIR
+              value: /etc/nginx/errors
+            - name: REJECTED_CONFIG_KEEP
+              value: "5"
+            # Testing aid, see settings.py: "true" makes every generated
+            # nginx config invalid, to exercise the rejection path.
+            - name: FORCE_INVALID_CONFIG
+              value: "false"
             - name: LOG_LEVEL
               value: INFO
           ports:
