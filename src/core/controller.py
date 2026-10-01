@@ -8,10 +8,10 @@ from kubernetes_asyncio import client
 from kubernetes_asyncio import config as k8s_config
 
 from managers import (
-    cleanup_validation_root,
+    build_validation_config,
+    cleanup_validation_config,
     commit_candidate_config,
     load_site_infos,
-    prepare_validation_root,
     render_config,
     write_candidate_config,
 )
@@ -82,11 +82,10 @@ class WordPressNginxController:
         """Re-read every WordpressSite in the namespace from the Kubernetes
         API, rebuild the full nginx config from scratch, and reload nginx
         only if the result is both different and valid. The candidate is
-        validated with `nginx -t` against an isolated scratch copy of the
-        config tree (see prepare_validation_root) - never alongside the
-        live config itself, and never moved into self.conf_path until
-        proven valid, so the live config is never overwritten with
-        something unverified and never touched by the validation step."""
+        validated with `nginx -t` through a throwaway main config (see
+        build_validation_config) without touching anything under nginx's
+        config directory; only once proven valid is it renamed over the
+        live config - the single step that modifies it."""
         sites, skipped = await load_site_infos(self.core_api, self.custom_api, self.namespace)
         lookup_activity_logged = self._track_pending_lookups(skipped, resolved_names={s.name for s in sites})
         content = render_config(sites)
@@ -115,15 +114,17 @@ class WordPressNginxController:
         self._last_synced_names = current_names
 
         candidate_path = write_candidate_config(content, self.conf_path)
-        scratch_main_conf = prepare_validation_root(candidate_path, self.conf_path)
+        validation_path = None
         try:
-            await self.nginx.validate(scratch_main_conf)
-        except NginxConfigError as e:
+            validation_path = build_validation_config(candidate_path, self.conf_path)
+            await self.nginx.validate(validation_path)
+        except (NginxConfigError, RuntimeError, OSError) as e:
             os.unlink(candidate_path)
             logger.error(f"Generated nginx config is invalid, keeping previous config: {e}")
             return
         finally:
-            cleanup_validation_root(scratch_main_conf)
+            if validation_path is not None:
+                cleanup_validation_config(validation_path)
 
         commit_candidate_config(candidate_path, self.conf_path)
 

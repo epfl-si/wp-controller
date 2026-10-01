@@ -1,7 +1,7 @@
 from .nginx_config import (
-    cleanup_validation_root,
+    build_validation_config,
+    cleanup_validation_config,
     commit_candidate_config,
-    prepare_validation_root,
     render_config,
     write_candidate_config,
 )
@@ -11,8 +11,8 @@ from .site_repository import list_wordpress_sites, load_site_infos
 __all__ = [
     "render_config",
     "write_candidate_config",
-    "prepare_validation_root",
-    "cleanup_validation_root",
+    "build_validation_config",
+    "cleanup_validation_config",
     "commit_candidate_config",
     "build_site_info",
     "list_wordpress_sites",
