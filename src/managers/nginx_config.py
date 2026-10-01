@@ -20,6 +20,20 @@ _env = Environment(
 )
 
 
+def nginx_quote(value) -> str:
+    """Render `value` as a single nginx string argument, whatever it
+    contains. Unquoted, a `;` (or a space, `#`, `{`...) in e.g. a database
+    password would end or split the directive; inside double quotes only
+    `\\`, `"` and `$` stay special. `$` would be read as a variable, and
+    nginx has no escape for it, so it goes through the `$dollar` variable
+    that templates/generic.conf defines as a literal `$`."""
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"').replace("$", "${dollar}")
+    return f'"{escaped}"'
+
+
+_env.filters["nginx_quote"] = nginx_quote
+
+
 def _group_by_hostname(sites: List[WordpressSiteInfo]):
     ordered = sorted(sites, key=attrgetter("hostname"))
     return [(hostname, list(group)) for hostname, group in groupby(ordered, key=attrgetter("hostname"))]

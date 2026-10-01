@@ -86,12 +86,12 @@ server {
         fastcgi_param WP_DEBUG           {{ "true" if site.debug else "false" }};
         fastcgi_param WP_ROOT_URI        {{ site.root_uri }};
         fastcgi_param WP_UPLOADS_DIRNAME  {{ site.uploads_dirname }};
-        fastcgi_param WP_DB_HOST         {{ site.db.host }};
-        fastcgi_param WP_DB_NAME         {{ site.db.name }};
-        fastcgi_param WP_DB_USER         {{ site.db.user }};
-        fastcgi_param WP_DB_PASSWORD     {{ site.db.password }};
+        fastcgi_param WP_DB_HOST         {{ site.db.host|nginx_quote }};
+        fastcgi_param WP_DB_NAME         {{ site.db.name|nginx_quote }};
+        fastcgi_param WP_DB_USER         {{ site.db.user|nginx_quote }};
+        fastcgi_param WP_DB_PASSWORD     {{ site.db.password|nginx_quote }};
 {% if site.protection_script %}
-        fastcgi_param DOWNLOADS_PROTECTION_SCRIPT {{ site.protection_script }};
+        fastcgi_param DOWNLOADS_PROTECTION_SCRIPT {{ site.protection_script|nginx_quote }};
 {% endif %}
     }
 
