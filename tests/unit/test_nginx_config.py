@@ -29,11 +29,13 @@ def test_password_with_special_characters_cannot_break_out_of_its_directive(samp
     assert 'fastcgi_param WP_DB_PASSWORD     "a;b c#d\\"e\\\\f${dollar}g{h}";' in rendered
 
 
-def test_files_served_from_disk_fall_back_to_the_site_when_missing(sample_wordpresssite_body, sample_db_credentials):
+def test_missing_files_keep_their_url_and_get_the_error_page(sample_wordpresssite_body, sample_db_credentials):
     rendered = render_config([build_site_info(sample_wordpresssite_body, sample_db_credentials)])
 
-    # uploads, static assets, and static images nested inside the assets one
-    assert rendered.count("try_files $uri /labs/lo/;") == 3
+    # try_files with a URI fallback is an internal redirect: $uri becomes the
+    # fallback, so the request used to reach PHP as the site root.
+    assert "try_files" not in rendered
+    assert "error_page 403 404 500 502 503 504 /global-error/index.php;" in rendered
 
 
 def test_site_location_defaults_to_php(sample_wordpresssite_body, sample_db_credentials):

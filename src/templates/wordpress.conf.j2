@@ -19,7 +19,7 @@ server {
     listen 8080;
     server_name {{ hostname }};
 
-    error_page 403 500 502 503 504 /global-error/index.php;
+    error_page 403 404 500 502 503 504 /global-error/index.php;
 
     location /global-error/ {
         set $status_code $status;
@@ -70,9 +70,6 @@ server {
             rewrite .*/(wp-content/uploads/(.*)) /$2 break;
             root {{ uploads_root }}/{{ site.uploads_dirname }}/uploads;
             add_header Cache-Control "129600, public";
-            {# Not on disk: let WordPress answer (via the site's own `location`,
-               which carries its fastcgi params) instead of a bare 404. #}
-            try_files $uri {{ site.root_uri }};
 {% endif %}
         }
 
@@ -83,13 +80,11 @@ server {
         location ~ {{ static_whitelist_re }} {
             rewrite .*/({{ static_whitelist_re }}.*) /$1 break;
             root /wp/;
-            try_files $uri {{ site.root_uri }};
 
             location ~* \.(ico|pdf|apng|avif|webp|jpg|jpeg|png|gif|svg)$ {
                 add_header Cache-Control "129600, public";
                 rewrite .*/({{ static_whitelist_re }}.*) /$1 break;
-                try_files $uri {{ site.root_uri }};
-            }
+                }
         }
 
         fastcgi_param WP_DEBUG           {{ "true" if site.debug else "false" }};
