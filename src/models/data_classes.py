@@ -19,6 +19,8 @@ class WordpressSiteInfo:
     debug: bool
     db: DbCredentials
     protection_script: str = ""
+    # Carries the annotation settings.FORCE_INVALID_CONFIG_ANNOTATION
+    force_invalid_config: bool = False
 
     @property
     def root_uri(self) -> str:

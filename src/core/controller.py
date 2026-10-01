@@ -20,7 +20,8 @@ from managers import (
 )
 from models import NginxConfigError, NginxReloadError
 from settings import (
-    FORCE_INVALID_CONFIG,
+    FORCE_INVALID_CONFIG_ANNOTATION,
+    LOG_LEVEL,
     NGINX_CONF_PATH,
     REJECTED_CONFIG_DIR,
     REJECTED_CONFIG_KEEP,
@@ -110,8 +111,12 @@ class WordPressNginxController:
         metrics.sites.labels("configured").set(len(sites))
         metrics.sites.labels("pending").set(len(skipped))
         content = render_config(sites)
-        if FORCE_INVALID_CONFIG:
-            logger.warning("FORCE_INVALID_CONFIG is set: deliberately generating an invalid nginx config")
+        forcing_sites = [s.name for s in sites if s.force_invalid_config]
+        if forcing_sites and LOG_LEVEL.upper() == "DEBUG":
+            logger.warning(
+                f"WordpressSite(s) {', '.join(forcing_sites)} bear the {FORCE_INVALID_CONFIG_ANNOTATION} "
+                "annotation: deliberately generating an invalid nginx config"
+            )
             content = force_invalid(content)
         previous_content = self._read_current_config()
 

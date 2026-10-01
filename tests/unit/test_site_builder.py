@@ -30,6 +30,11 @@ class TestBuildSiteInfo:
         site = build_site_info(sample_wordpresssite_body, sample_db_credentials)
         assert site.protection_script == "/scripts/protect.php"
 
+    def test_force_invalid_config_annotation(self, sample_wordpresssite_body, sample_db_credentials):
+        assert build_site_info(sample_wordpresssite_body, sample_db_credentials).force_invalid_config is False
+        sample_wordpresssite_body["metadata"]["annotations"] = {"wp-controller.epfl.ch/force-invalid-config": ""}
+        assert build_site_info(sample_wordpresssite_body, sample_db_credentials).force_invalid_config is True
+
     def test_rejects_unsafe_hostname(self, sample_wordpresssite_body, sample_db_credentials):
         sample_wordpresssite_body["spec"]["hostname"] = "evil.com; server { }"
         with pytest.raises(ValueError, match="unsafe hostname"):

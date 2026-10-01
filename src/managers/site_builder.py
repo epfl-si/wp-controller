@@ -1,6 +1,7 @@
 import re
 
 from models import DbCredentials, WordpressSiteInfo
+from settings import FORCE_INVALID_CONFIG_ANNOTATION
 
 # The WordpressSite CRD only constrains `path` to start with a slash
 # (`^/(.*)`), so unlike `hostname` it cannot be trusted to be free of
@@ -37,4 +38,5 @@ def build_site_info(raw_site: dict, db: DbCredentials) -> WordpressSiteInfo:
         debug=bool(wordpress.get("debug", False)),
         db=db,
         protection_script=wordpress.get("downloadsProtectionScript", "") or "",
+        force_invalid_config=FORCE_INVALID_CONFIG_ANNOTATION in (metadata.get("annotations") or {}),
     )

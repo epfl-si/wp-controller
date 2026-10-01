@@ -50,11 +50,11 @@ def render_config(sites: List[WordpressSiteInfo]) -> str:
 
 
 def force_invalid(content: str) -> str:
-    """Testing aid (see settings.FORCE_INVALID_CONFIG): make `content`
+    """Testing aid (see settings.FORCE_INVALID_CONFIG_ANNOTATION): make `content`
     unparseable for nginx, with a note saying why."""
     return (
         f"{content}\n"
-        "# FORCE_INVALID_CONFIG is set: the directive below is deliberately invalid\n"
+        "# force-invalid-config annotation: the directive below is deliberately invalid\n"
         "wp_controller_forced_invalid_directive;\n"
     )
 
