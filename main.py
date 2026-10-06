@@ -16,7 +16,7 @@ from handlers import (  # noqa: E402,F401 (registers the kopf handlers)
     on_user_change,
     on_wordpresssite_change,
 )
-from settings import LOG_LEVEL, RELOAD_DEBOUNCE_SECONDS  # noqa: E402
+from settings import LOG_LEVEL  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
     logging.getLogger().setLevel(LOG_LEVEL)
 
     settings.posting.level = logging.INFO
-    settings.batching.batch_window = RELOAD_DEBOUNCE_SECONDS
     # This is a namespaced-only operator: it must not need cluster-scoped
     # RBAC to list CustomResourceDefinitions or Namespaces
     settings.scanning.disabled = True
