@@ -72,7 +72,7 @@ spec:
               drop: ["ALL"]
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /livez
               port: http
             initialDelaySeconds: 5
           readinessProbe:
