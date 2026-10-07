@@ -30,6 +30,11 @@ class TestBuildSiteInfo:
         site = build_site_info(sample_wordpresssite_body, sample_db_credentials)
         assert site.protection_script == "/scripts/protect.php"
 
+    def test_versioned_protection_script_path_is_unversioned(self, sample_wordpresssite_body, sample_db_credentials):
+        sample_wordpresssite_body["spec"]["wordpress"]["downloadsProtectionScript"] = "/wp/6/wp-content/plugins/epfl-intranet/inc/protect-medias.php"
+        site = build_site_info(sample_wordpresssite_body, sample_db_credentials)
+        assert site.protection_script == "/wp/wp-content/plugins/epfl-intranet/inc/protect-medias.php"
+
     def test_force_invalid_config_annotation(self, sample_wordpresssite_body, sample_db_credentials):
         assert build_site_info(sample_wordpresssite_body, sample_db_credentials).force_invalid_config is False
         sample_wordpresssite_body["metadata"]["annotations"] = {"wp-controller.epfl.ch/force-invalid-config": ""}

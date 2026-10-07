@@ -8,6 +8,9 @@ from settings import FORCE_INVALID_CONFIG_ANNOTATION
 # characters that would break out of an nginx `location` block.
 _SAFE_HOST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$")
 _SAFE_PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./]*$")
+# Older WordpressSites point downloadsProtectionScript at a versioned tree
+# (`/wp/6/wp-content/...`); the image only has the unversioned `/wp/`.
+_VERSIONED_WP_DIR_RE = re.compile(r"^/wp/\d+/")
 
 
 def build_site_info(raw_site: dict, db: DbCredentials) -> WordpressSiteInfo:
@@ -37,6 +40,6 @@ def build_site_info(raw_site: dict, db: DbCredentials) -> WordpressSiteInfo:
         uploads_dirname=name,
         debug=bool(wordpress.get("debug", False)),
         db=db,
-        protection_script=wordpress.get("downloadsProtectionScript", "") or "",
+        protection_script=_VERSIONED_WP_DIR_RE.sub("/wp/", wordpress.get("downloadsProtectionScript", "") or ""),
         force_invalid_config=FORCE_INVALID_CONFIG_ANNOTATION in (metadata.get("annotations") or {}),
     )
