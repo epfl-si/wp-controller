@@ -4,10 +4,23 @@ server {
     listen 8000 default_server;
     server_name _;
 
+    # Liveness: nginx is up.
+    location /livez {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Readiness: 200 only once every WordpressSite has been resolved into
+    # a location below - before that, every request would 404.
     location /healthz {
         access_log off;
+        default_type text/plain;
+{% if ready %}
         return 200 "ok\n";
-        add_header Content-Type text/plain;
+{% else %}
+        return 503 "sites not loaded yet\n";
+{% endif %}
     }
 
     location / {

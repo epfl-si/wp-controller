@@ -73,7 +73,7 @@ class NginxProcess:
     async def watchdog(self, poll_interval: float = 3.0) -> None:
         """Run forever: if nginx dies unexpectedly, exit immediately rather
         than restarting it in-process. Kubernetes' pod restartPolicy is what
-        actually recovers from that (see the livenessProbe on /healthz in
+        actually recovers from that (see the livenessProbe on /livez in
         manifests/deployment.yaml, which nginx itself serves) - restarting
         the whole process gets a clean re-sync for free instead of adding
         our own process-supervision logic."""

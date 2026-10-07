@@ -110,7 +110,9 @@ class WordPressNginxController:
         lookup_activity_logged = self._track_pending_lookups(skipped, resolved_names={s.name for s in sites})
         metrics.sites.labels("configured").set(len(sites))
         metrics.sites.labels("pending").set(len(skipped))
-        content = render_config(sites)
+        # Ready (/healthz answers 200) once no site is still waiting for its
+        # Database/User/Secret; a site given up on no longer counts.
+        content = render_config(sites, ready=not self._pending_lookups)
         forcing_sites = [s.name for s in sites if s.force_invalid_config]
         if forcing_sites and LOG_LEVEL.upper() == "DEBUG":
             logger.warning(

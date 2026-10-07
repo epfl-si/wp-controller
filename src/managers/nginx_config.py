@@ -39,10 +39,11 @@ def _group_by_hostname(sites: List[WordpressSiteInfo]):
     return [(hostname, list(group)) for hostname, group in groupby(ordered, key=attrgetter("hostname"))]
 
 
-def render_config(sites: List[WordpressSiteInfo]) -> str:
+def render_config(sites: List[WordpressSiteInfo], ready: bool = True) -> str:
     template = _env.get_template("wordpress.conf.j2")
     return template.render(
         hosts=_group_by_hostname(sites),
+        ready=ready,
         fastcgi_include_path=FASTCGI_INCLUDE_PATH,
         uploads_root=UPLOADS_ROOT,
         static_whitelist_re=STATIC_ASSET_WHITELIST_RE,
