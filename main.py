@@ -17,6 +17,7 @@ from handlers import (  # noqa: E402,F401 (registers the kopf handlers)
     on_wordpresssite_change,
 )
 from settings import LOG_LEVEL  # noqa: E402
+from version import read_version  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,10 @@ async def on_startup(settings: kopf.OperatorSettings, **_):
     # is what actually has the final say (see the kopf.objects override
     # right below, which relies on the same ordering).
     logging.getLogger().setLevel(LOG_LEVEL)
+
+    # First thing logged, before anything below can fail: tells which
+    # version a pod actually runs when it misbehaves.
+    logger.info(f"wp-controller {read_version()} starting")
 
     settings.posting.level = logging.INFO
     # This is a namespaced-only operator: it must not need cluster-scoped

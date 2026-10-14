@@ -46,7 +46,6 @@ docs/
 
 # Development dependencies
 requirements-dev.txt
-setup.py
 
 # Test files
 tests/
