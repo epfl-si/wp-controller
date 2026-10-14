@@ -4,9 +4,16 @@ server {
     listen 8000 default_server;
     server_name _;
 
-    # Liveness and readiness: up as soon as nginx serves a config. An
-    # unresolved site just 404s; it must not make the others unavailable.
+    # Readiness: ready as soon as nginx serves a config. An unresolved site
+    # just 404s; it must not make the others unavailable.
     location /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Liveness: nginx is up.
+    location /livez {
         access_log off;
         default_type text/plain;
         return 200 "ok\n";

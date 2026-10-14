@@ -53,13 +53,14 @@ def test_force_invalid_appends_an_unknown_directive():
     assert "\nwp_controller_forced_invalid_directive;\n" in broken
 
 
-def test_healthz_answers_200_whatever_the_sites(sample_wordpresssite_body, sample_db_credentials):
-    """/healthz is both the liveness and the readiness probe and must never
-    answer 503: a site that can't be resolved just 404s, it must not take the
-    sites that did resolve out of the Service."""
+def test_health_endpoints_answer_200_whatever_the_sites(sample_wordpresssite_body, sample_db_credentials):
+    """Neither /healthz (readiness) nor /livez (liveness) may answer 503: a
+    site that can't be resolved just 404s, it must not take the sites that
+    did resolve out of the Service."""
     for sites in ([], [build_site_info(sample_wordpresssite_body, sample_db_credentials)]):
         rendered = render_config(sites)
 
-        block = rendered.split("location /healthz {", 1)[1].split("}", 1)[0]
-        assert 'return 200 "ok\\n";' in block
+        for path in ("/healthz", "/livez"):
+            block = rendered.split(f"location {path} {{", 1)[1].split("}", 1)[0]
+            assert 'return 200 "ok\\n";' in block
         assert "return 503" not in rendered
