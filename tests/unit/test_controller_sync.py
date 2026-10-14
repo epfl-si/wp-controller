@@ -146,3 +146,92 @@ class TestKeepRejectedConfig:
         monkeypatch.setattr(sys.modules["core.controller"], "REJECTED_CONFIG_DIR", str(blocker / "sub"))
 
         assert controller._keep_rejected_config("x", NginxConfigError("boom")) is None
+
+
+class TestReadinessLatch:
+    """/healthz gates the pod's readiness on the *initial* load only: once no
+    site is waiting any more it stays 200, whatever happens to a site
+    afterwards. Before, a site failing to resolve - at startup or later -
+    put every sync in 503 for SITE_LOOKUP_RETRY_TIMEOUT_SECONDS, then back
+    to 200 for a moment once given up on, then 503 again, taking all the
+    healthy sites out of the Service with it."""
+
+    TIMEOUT = 0.05
+
+    @pytest.fixture
+    def sync_env(self, controller, monkeypatch):
+        module = sys.modules["core.controller"]
+        monkeypatch.setattr(module, "SITE_LOOKUP_RETRY_TIMEOUT_SECONDS", self.TIMEOUT)
+
+        env = type("Env", (), {})()
+        env.skipped = {}
+        env.ready_seen = []
+
+        async def fake_load_site_infos(*_):
+            return [], dict(env.skipped)
+
+        def fake_render_config(sites, ready=True):
+            env.ready_seen.append(ready)
+            return "config"
+
+        monkeypatch.setattr(module, "load_site_infos", fake_load_site_infos)
+        monkeypatch.setattr(module, "render_config", fake_render_config)
+        # Same content as the rendered one: _sync returns at the "unchanged"
+        # step, before it would write files or touch nginx.
+        monkeypatch.setattr(controller, "_read_current_config", lambda: "config")
+        env.ctrl = controller
+        yield env
+        controller.cancel_pending_sync()
+
+    @staticmethod
+    async def past_timeout():
+        await asyncio.sleep(TestReadinessLatch.TIMEOUT * 1.5)
+
+    @pytest.mark.asyncio
+    async def test_not_ready_while_a_site_is_pending_at_startup(self, sync_env):
+        sync_env.skipped = {"a": "no User owned by it"}
+        await sync_env.ctrl._sync()
+        assert sync_env.ready_seen == [False]
+
+    @pytest.mark.asyncio
+    async def test_ready_once_the_site_is_given_up_on_and_stays_ready(self, sync_env):
+        sync_env.skipped = {"a": "no User owned by it"}
+        await sync_env.ctrl._sync()
+        await self.past_timeout()
+        await sync_env.ctrl._sync()  # gives up on "a"
+        await sync_env.ctrl._sync()  # "a" is still unresolved: must not go back to pending
+        await sync_env.ctrl._sync()
+
+        assert sync_env.ready_seen == [False, True, True, True]
+        assert "a" not in sync_env.ctrl._pending_lookups
+        assert "a" in sync_env.ctrl._given_up
+
+    @pytest.mark.asyncio
+    async def test_a_site_breaking_after_startup_does_not_flip_readiness(self, sync_env):
+        await sync_env.ctrl._sync()  # nothing pending: ready from the first sync
+        sync_env.skipped = {"b": "no User owned by it"}
+        await sync_env.ctrl._sync()  # "b" starts waiting
+        await self.past_timeout()
+        await sync_env.ctrl._sync()  # "b" given up on
+        await sync_env.ctrl._sync()
+
+        assert sync_env.ready_seen == [True, True, True, True]
+
+    @pytest.mark.asyncio
+    async def test_given_up_site_is_forgotten_once_it_resolves(self, sync_env):
+        sync_env.skipped = {"a": "no User owned by it"}
+        await sync_env.ctrl._sync()
+        await self.past_timeout()
+        await sync_env.ctrl._sync()
+        assert "a" in sync_env.ctrl._given_up
+
+        sync_env.skipped = {}  # the User showed up (its event triggered this sync)
+        await sync_env.ctrl._sync()
+        assert not sync_env.ctrl._given_up
+        assert not sync_env.ctrl._pending_lookups
+
+        # Breaking again later starts a fresh wait instead of being ignored.
+        sync_env.skipped = {"a": "no User owned by it"}
+        await sync_env.ctrl._sync()
+        assert "a" in sync_env.ctrl._pending_lookups
+        assert sync_env.ready_seen[-1] is True

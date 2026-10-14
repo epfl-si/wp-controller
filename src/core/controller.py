@@ -58,6 +58,17 @@ class WordPressNginxController:
         # site_name -> monotonic time it was first seen skipped for a
         # not-yet-resolvable dependency (see sync()).
         self._pending_lookups: dict[str, float] = {}
+        # Sites given up on after SITE_LOOKUP_RETRY_TIMEOUT_SECONDS and still
+        # unresolved. Kept apart from _pending_lookups so they aren't put
+        # straight back into it by the next sync (which used to make
+        # /healthz flap between 200 and 503 every couple of minutes); the
+        # Database/User/Secret events re-trigger a sync once they resolve.
+        self._given_up: set[str] = set()
+        # Latches to True the first time no site is still waiting, and
+        # never goes back: /healthz gates the pod's readiness on the initial
+        # load only. A site that breaks later must not take the pod - and
+        # the healthy sites it serves - out of the Service.
+        self._initial_load_settled = False
         self._retry_task: Optional[asyncio.Task] = None
         # None until the first sync commits a config - distinguishes the
         # initial "here's what got configured" log from later diffs.
@@ -110,9 +121,12 @@ class WordPressNginxController:
         lookup_activity_logged = self._track_pending_lookups(skipped, resolved_names={s.name for s in sites})
         metrics.sites.labels("configured").set(len(sites))
         metrics.sites.labels("pending").set(len(skipped))
-        # Ready (/healthz answers 200) once no site is still waiting for its
-        # Database/User/Secret; a site given up on no longer counts.
-        content = render_config(sites, ready=not self._pending_lookups)
+        # Ready (/healthz answers 200) once the initial load has settled: no
+        # site still waiting for its Database/User/Secret (a site given up
+        # on no longer counts). Latched - see _initial_load_settled.
+        if not self._pending_lookups:
+            self._initial_load_settled = True
+        content = render_config(sites, ready=self._initial_load_settled)
         forcing_sites = [s.name for s in sites if s.force_invalid_config]
         if forcing_sites and LOG_LEVEL.upper() == "DEBUG":
             logger.warning(
@@ -241,6 +255,11 @@ class WordPressNginxController:
         Returns whether anything was logged, so sync() can skip its own
         "no configuration change" line when this already explained why.
 
+        A site still unresolved after the timeout is given up on: it moves
+        to _given_up and isn't tracked (or retried) any more, until it
+        resolves or is removed - the Database/User/Secret events trigger
+        the sync that notices.
+
         A site leaving `skipped` isn't necessarily resolved: it may instead
         have been deleted (or be stuck Terminating behind some other
         finalizer while wp-operator tears its DB down first) while still
@@ -260,7 +279,19 @@ class WordPressNginxController:
             else:
                 logger.info(f"WordpressSite {self.namespace}/{site_name} was removed while waiting (waited {waited:.0f}s)")
 
+        for site_name in list(self._given_up):
+            if site_name in skipped:
+                continue  # still unresolved, already reported
+            self._given_up.discard(site_name)
+            logged = True
+            if site_name in resolved_names:
+                logger.info(f"WordpressSite {self.namespace}/{site_name} is now resolved (after having been given up on)")
+            else:
+                logger.info(f"WordpressSite {self.namespace}/{site_name} was removed (after having been given up on)")
+
         for site_name, reason in skipped.items():
+            if site_name in self._given_up:
+                continue
             if site_name not in self._pending_lookups:
                 self._pending_lookups[site_name] = now
                 logged = True
@@ -278,6 +309,7 @@ class WordPressNginxController:
                     f"still unresolved after {SITE_LOOKUP_RETRY_TIMEOUT_SECONDS:.0f}s ({skipped[site_name]})"
                 )
                 del self._pending_lookups[site_name]
+                self._given_up.add(site_name)
             else:
                 still_waiting = True
 
