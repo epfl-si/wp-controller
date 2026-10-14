@@ -60,15 +60,11 @@ class WordPressNginxController:
         self._pending_lookups: dict[str, float] = {}
         # Sites given up on after SITE_LOOKUP_RETRY_TIMEOUT_SECONDS and still
         # unresolved. Kept apart from _pending_lookups so they aren't put
-        # straight back into it by the next sync (which used to make
-        # /healthz flap between 200 and 503 every couple of minutes); the
-        # Database/User/Secret events re-trigger a sync once they resolve.
+        # straight back into it by the next sync - which would retry them
+        # every SITE_LOOKUP_RETRY_SECONDS forever and log an error every
+        # couple of minutes; the Database/User/Secret events re-trigger a
+        # sync once they resolve.
         self._given_up: set[str] = set()
-        # Latches to True the first time no site is still waiting, and
-        # never goes back: /healthz gates the pod's readiness on the initial
-        # load only. A site that breaks later must not take the pod - and
-        # the healthy sites it serves - out of the Service.
-        self._initial_load_settled = False
         self._retry_task: Optional[asyncio.Task] = None
         # None until the first sync commits a config - distinguishes the
         # initial "here's what got configured" log from later diffs.
@@ -121,12 +117,7 @@ class WordPressNginxController:
         lookup_activity_logged = self._track_pending_lookups(skipped, resolved_names={s.name for s in sites})
         metrics.sites.labels("configured").set(len(sites))
         metrics.sites.labels("pending").set(len(skipped))
-        # Ready (/healthz answers 200) once the initial load has settled: no
-        # site still waiting for its Database/User/Secret (a site given up
-        # on no longer counts). Latched - see _initial_load_settled.
-        if not self._pending_lookups:
-            self._initial_load_settled = True
-        content = render_config(sites, ready=self._initial_load_settled)
+        content = render_config(sites)
         forcing_sites = [s.name for s in sites if s.force_invalid_config]
         if forcing_sites and LOG_LEVEL.upper() == "DEBUG":
             logger.warning(
