@@ -27,6 +27,14 @@ async def list_wordpress_sites(custom_api: CustomObjectsApi, namespace: str) -> 
     return response.get("items", [])
 
 
+def is_creating(raw_site: dict) -> bool:
+    """Whether wp-operator is still provisioning this WordpressSite: it only
+    sets `status.wordpresssite` once the site is created. Until then it
+    isn't ready to be served - even if its Database/User/Secret already
+    exist, WordPress may not be installed yet."""
+    return (raw_site.get("status") or {}).get("wordpresssite") is None
+
+
 def owned_by_site(owner_references, site_uid: str) -> bool:
     """Whether one of these ownerReferences (dicts for custom objects,
     V1OwnerReference models for core ones) points to the WordpressSite with
@@ -120,7 +128,12 @@ async def load_site_infos(
     sites' names and error messages alongside, so WordPressNginxController.
     sync can retry them once their dependencies (e.g. wp-operator's
     Database/User/Secret) show up, and narrate that wait once per site
-    instead of logging the same skip on every retry."""
+    instead of logging the same skip on every retry.
+
+    A site still being created (see is_creating) is left out of both: it
+    can take far longer than the retry timeout, and wp-operator filling its
+    status is a WordpressSite event, which triggers the sync that picks it
+    up - nothing to retry, nothing to report as a failure."""
     raw_sites = await list_wordpress_sites(custom_api, namespace)
     databases, users, secrets = await load_db_credentials_index(core_api, custom_api, namespace)
 
@@ -128,6 +141,9 @@ async def load_site_infos(
     skipped = {}
     for raw_site in raw_sites:
         site_name = raw_site.get("metadata", {}).get("name", "<unknown>")
+        if is_creating(raw_site):
+            logger.debug(f"Skipping WordpressSite {namespace}/{site_name}: still being created by the operator")
+            continue
         try:
             db = resolve_db_credentials(raw_site, databases, users, secrets)
             sites.append(build_site_info(raw_site, db))

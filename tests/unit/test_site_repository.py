@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from managers.site_repository import resolve_db_credentials
+from managers import site_repository
+from managers.site_repository import is_creating, load_site_infos, resolve_db_credentials
 from models import WordpressSiteLookupError
 
 SITE_UID = "site-uid-1"
@@ -87,3 +88,72 @@ class TestResolveDbCredentials:
     def test_site_without_uid(self):
         with pytest.raises(WordpressSiteLookupError, match="no uid"):
             resolve_db_credentials({"metadata": {"name": "x", "namespace": "ns"}}, [], [], [])
+
+
+class TestSitesBeingCreated:
+    """A WordpressSite is served only once wp-operator has filled its
+    `status.wordpresssite` (it is "creating" until then)."""
+
+    @pytest.fixture
+    def serve(self, monkeypatch):
+        """Runs load_site_infos over these raw sites, all of which have their
+        Database/User/Secret already provisioned."""
+
+        async def run(*raw_sites):
+            async def list_sites(*_):
+                return list(raw_sites)
+
+            async def index(*_):
+                uid = raw_sites[0]["metadata"]["uid"]
+                return [database(uid=uid)], [user(uid=uid)], [secret(uid=uid)]
+
+            monkeypatch.setattr(site_repository, "list_wordpress_sites", list_sites)
+            monkeypatch.setattr(site_repository, "load_db_credentials_index", index)
+            return await load_site_infos(None, None, "wordpress-test")
+
+        return run
+
+    @pytest.mark.parametrize("status", [None, {}, {"kopf": {"progress": {}}}, {"wordpresssite": None}])
+    def test_creating_until_the_operator_fills_status_wordpresssite(self, status):
+        assert is_creating({"metadata": {}, "status": status}) is True
+        assert is_creating({"metadata": {}}) is True
+
+    @pytest.mark.parametrize("filled", [{"languages": []}, {}])
+    def test_created_once_status_wordpresssite_is_filled(self, filled):
+        assert is_creating({"status": {"wordpresssite": filled}}) is False
+
+    @pytest.mark.asyncio
+    async def test_created_site_is_served(self, serve, sample_wordpresssite_body):
+        sample_wordpresssite_body["status"] = {"wordpresssite": {"languages": []}}
+
+        sites, skipped = await serve(sample_wordpresssite_body)
+
+        assert [s.name for s in sites] == ["www-labs-lo"]
+        assert skipped == {}
+
+    @pytest.mark.asyncio
+    async def test_site_being_created_is_not_served_even_with_its_credentials(self, serve, sample_wordpresssite_body):
+        sites, _ = await serve(sample_wordpresssite_body)
+
+        assert sites == []
+
+    @pytest.mark.asyncio
+    async def test_site_being_created_is_not_reported_as_pending(self, serve, sample_wordpresssite_body):
+        """Not in `skipped`: the controller would retry it and give up with an
+        error after SITE_LOOKUP_RETRY_TIMEOUT_SECONDS, while creating a
+        site legitimately takes longer than that."""
+        _, skipped = await serve(sample_wordpresssite_body)
+
+        assert skipped == {}
+
+    @pytest.mark.asyncio
+    async def test_a_site_being_created_does_not_hide_the_others(self, serve, sample_wordpresssite_body):
+        created = {**sample_wordpresssite_body, "status": {"wordpresssite": {"languages": []}}}
+        creating = {
+            **sample_wordpresssite_body,
+            "metadata": {**sample_wordpresssite_body["metadata"], "name": "new-site", "uid": "other-uid"},
+        }
+
+        sites, _ = await serve(created, creating)
+
+        assert [s.name for s in sites] == ["www-labs-lo"]
