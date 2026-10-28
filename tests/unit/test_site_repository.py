@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from managers import site_repository
-from managers.site_repository import is_creating, load_site_infos, resolve_db_credentials
+from managers.site_repository import is_ready, load_site_infos, resolve_db_credentials
 from models import WordpressSiteLookupError
 
 SITE_UID = "site-uid-1"
@@ -114,13 +114,13 @@ class TestSitesBeingCreated:
         return run
 
     @pytest.mark.parametrize("status", [None, {}, {"kopf": {"progress": {}}}, {"wordpresssite": None}])
-    def test_creating_until_the_operator_fills_status_wordpresssite(self, status):
-        assert is_creating({"metadata": {}, "status": status}) is True
-        assert is_creating({"metadata": {}}) is True
+    def test_not_ready_until_the_operator_fills_status_wordpresssite(self, status):
+        assert is_ready({"metadata": {}, "status": status}) is False
+        assert is_ready({"metadata": {}}) is False
 
     @pytest.mark.parametrize("filled", [{"languages": []}, {}])
-    def test_created_once_status_wordpresssite_is_filled(self, filled):
-        assert is_creating({"status": {"wordpresssite": filled}}) is False
+    def test_ready_once_status_wordpresssite_is_filled(self, filled):
+        assert is_ready({"status": {"wordpresssite": filled}}) is True
 
     @pytest.mark.asyncio
     async def test_created_site_is_served(self, serve, sample_wordpresssite_body):

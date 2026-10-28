@@ -27,12 +27,12 @@ async def list_wordpress_sites(custom_api: CustomObjectsApi, namespace: str) -> 
     return response.get("items", [])
 
 
-def is_creating(raw_site: dict) -> bool:
-    """Whether wp-operator is still provisioning this WordpressSite: it only
+def is_ready(raw_site: dict) -> bool:
+    """Whether wp-operator is done provisioning this WordpressSite: it only
     sets `status.wordpresssite` once the site is created. Until then it
     isn't ready to be served - even if its Database/User/Secret already
     exist, WordPress may not be installed yet."""
-    return (raw_site.get("status") or {}).get("wordpresssite") is None
+    return (raw_site.get("status") or {}).get("wordpresssite") is not None
 
 
 def owned_by_site(owner_references, site_uid: str) -> bool:
@@ -130,7 +130,7 @@ async def load_site_infos(
     Database/User/Secret) show up, and narrate that wait once per site
     instead of logging the same skip on every retry.
 
-    A site still being created (see is_creating) is left out of both: it
+    A site that isn't ready yet (see is_ready) is left out of both: it
     can take far longer than the retry timeout, and wp-operator filling its
     status is a WordpressSite event, which triggers the sync that picks it
     up - nothing to retry, nothing to report as a failure."""
@@ -141,7 +141,7 @@ async def load_site_infos(
     skipped = {}
     for raw_site in raw_sites:
         site_name = raw_site.get("metadata", {}).get("name", "<unknown>")
-        if is_creating(raw_site):
+        if not is_ready(raw_site):
             logger.debug(f"Skipping WordpressSite {namespace}/{site_name}: still being created by the operator")
             continue
         try:
